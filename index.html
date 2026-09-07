@@ -475,7 +475,6 @@
   };
 
   var db = null;
-  var downloads = null;
   var pendingFiles = [];
   var batchAbort = null;
 
@@ -1569,21 +1568,18 @@
   });
 
   document.getElementById('export-csv').addEventListener('click', function(){
+    // Always a plain, direct browser download — the Claude "downloads" capability's own save
+    // prompt (a different flow, tied to the platform's save/share UI) is deliberately not used
+    // here, so this behaves identically wherever the page is opened.
     var csv = '﻿' + toCsv();
-    if(downloads){
-      downloads.save({ filename: 'factures-seuil-' + isoDate(new Date()) + '.csv', data: csv }).catch(function(err){
-        if(err && err.code === 'declined') return;
-        console.error('export failed', err);
-      });
-    } else {
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'factures-seuil-' + isoDate(new Date()) + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'factures-seuil-' + isoDate(new Date()) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   });
 
   // ---------------- boot ----------------
@@ -1594,7 +1590,6 @@
       if(resolved){ db = resolved; initDbBackend(); fillThresholdInputs(); }
       else { initLocalBackend(); }
     }).catch(function(){ initLocalBackend(); });
-    window.claude.use('downloads').then(function(resolved){ downloads = resolved; }).catch(function(){ downloads = null; });
   } else {
     initSupabaseBackend();
   }
