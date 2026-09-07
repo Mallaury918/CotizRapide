@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seuil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html{ color-scheme: light dark; }
+  body{ margin:0; }
+  [hidden]{ display:none !important; }
+  img{ max-width:100%; }
+  :root{
+    --paper:#EEF0F3;
+    --card:#FFFFFF;
+    --card-soft:#F6F7F9;
+    --ink:#171F27;
+    --ink-soft:#5A6771;
+    --ink-faint:#8B95A0;
+    --line:#DBE1E6;
+    --line-strong:#C4CCD3;
+    --accent:#3E4E86;
+    --accent-ink:#2E3B68;
+    --accent-soft:#E8EAF5;
+    --ok:#276A4E;
+    --ok-soft:#E4F0E9;
+    --warn:#8A5E0A;
+    --warn-soft:#F6ECD6;
+    --danger:#A6373B;
+    --danger-soft:#F6E3E1;
+    --shadow: 0 1px 2px rgba(23,31,39,0.04), 0 8px 24px -12px rgba(23,31,39,0.16);
+    --radius: 14px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#12161C;
+      --card:#1A2028;
+      --card-soft:#20272F;
+      --ink:#E8ECEF;
+      --ink-soft:#9CA7B1;
+      --ink-faint:#6E7982;
+      --line:#2A323B;
+      --line-strong:#3A434D;
+      --accent:#8B9AE0;
+      --accent-ink:#B0BCEC;
+      --accent-soft:#242C48;
+      --ok:#5FBF93;
+      --ok-soft:#1C332A;
+      --warn:#E0B156;
+      --warn-soft:#3A2E15;
+      --danger:#E38A8C;
+      --danger-soft:#3B2223;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#12161C;
+    --card:#1A2028;
+    --card-soft:#20272F;
+    --ink:#E8ECEF;
+    --ink-soft:#9CA7B1;
+    --ink-faint:#6E7982;
+    --line:#2A323B;
+    --line-strong:#3A434D;
+    --accent:#8B9AE0;
+    --accent-ink:#B0BCEC;
+    --accent-soft:#242C48;
+    --ok:#5FBF93;
+    --ok-soft:#1C332A;
+    --warn:#E0B156;
+    --warn-soft:#3A2E15;
+    --danger:#E38A8C;
+    --danger-soft:#3B2223;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num, input[type="number"], input[type="date"], .gauge-value, .gauge-limits, .period-label, .year-label,
+  .inv-date, .inv-total, .inv-tag, .stat-num{
+    font-family:'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  h1,h2,h3{ text-wrap:balance; font-weight:700; letter-spacing:-0.01em; }
+  a{color:var(--accent);}
+  button{ font-family:inherit; }
+
+  .page{ max-width:1100px; margin:0 auto; padding:28px 22px 64px; }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
+  .brand{ display:flex; align-items:center; gap:14px; }
+  .brand-mark{ width:44px; height:44px; flex:none; color:var(--accent); }
+  .brand h1{ font-size:23px; margin:0; color:var(--ink); }
+  .brand .tagline{ margin:2px 0 0; font-size:13px; color:var(--ink-soft); }
+  .sync-state{ font-size:12px; color:var(--ink-faint); display:flex; align-items:center; gap:6px; }
+  .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:none; }
+  .sync-dot.live{ background:var(--ok); }
+  .sync-dot.local{ background:var(--warn); }
+
+  .layout{ display:grid; grid-template-columns:0.95fr 1.05fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
+
+  .col-primary, .col-secondary{ display:flex; flex-direction:column; gap:18px; min-width:0; }
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px 22px; box-shadow:var(--shadow);
+  }
+  .card-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .card-head h2{ font-size:15.5px; margin:0; }
+  .card > h2{ font-size:15.5px; margin:0 0 6px; }
+  .form-hint{ font-size:12.5px; color:var(--ink-soft); margin:0 0 16px; line-height:1.5; }
+
+  .year-nav{ display:flex; align-items:center; gap:10px; }
+  .year-nav button{
+    width:28px; height:28px; border-radius:8px; border:1px solid var(--line); background:var(--card-soft);
+    color:var(--ink); font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .year-nav button:hover{ border-color:var(--line-strong); }
+  #year-label, #period-label{ font-size:13px; font-weight:600; color:var(--ink); min-width:9ch; text-align:center; }
+
+  /* ---- gauges ---- */
+  .gauges{ display:flex; flex-direction:column; gap:20px; }
+  .gauge-row{ display:flex; flex-direction:column; gap:8px; }
+  .gauge-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .gauge-label{ font-size:14px; font-weight:600; }
+  .gauge-value{ font-size:13.5px; color:var(--ink-soft); }
+  .gauge-track{ position:relative; height:12px; background:var(--card-soft); border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+  .gauge-fill{ position:absolute; inset:0 auto 0 0; width:0%; border-radius:6px; background:var(--ok); transition:width .35s ease; }
+  .gauge-fill.warn{ background:var(--warn); }
+  .gauge-fill.over{ background:var(--danger); }
+  .gauge-marker{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink); opacity:0.28; }
+  .gauge-limits{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint); }
+  .gauge-status{ font-size:12.5px; font-weight:600; padding:7px 10px; border-radius:8px; }
+  .gauge-status.ok{ color:var(--ok); background:var(--ok-soft); }
+  .gauge-status.warn{ color:var(--warn); background:var(--warn-soft); }
+  .gauge-status.over{ color:var(--danger); background:var(--danger-soft); }
+
+  .link-btn{
+    border:none; background:none; color:var(--accent); font-size:12.5px; font-weight:600; cursor:pointer;
+    padding:0; margin-top:14px; text-decoration:underline; text-underline-offset:2px;
+  }
+  .thresholds-editor{ margin-top:14px; padding-top:14px; border-top:1px dashed var(--line); }
+  .thresholds-editor .grid4{ display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; margin-bottom:12px; }
+  .thresholds-editor label{ font-size:11.5px; color:var(--ink-soft); font-weight:600; display:block; margin-bottom:4px; }
+  .thresholds-editor input{ width:100%; }
+
+  /* ---- urssaf card ---- */
+  .period-controls{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .segmented{ display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .segmented button{
+    border:none; background:var(--card); color:var(--ink-soft); font-size:12.5px; font-weight:600;
+    padding:7px 13px; cursor:pointer;
+  }
+  .segmented button.active{ background:var(--accent-soft); color:var(--accent-ink); }
+  .urssaf-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:520px){ .urssaf-stats{ grid-template-columns:1fr; } }
+  .stat-tile{ background:var(--card-soft); border:1px solid var(--line); border-radius:11px; padding:14px 15px; }
+  .stat-tile .stat-num{ font-size:21px; font-weight:700; }
+  .stat-tile .stat-label{ font-size:12px; color:var(--ink-soft); margin-top:3px; }
+  .urssaf-estimate{ margin-top:14px; padding:16px; background:var(--accent-soft); border-radius:11px; }
+  .urssaf-estimate-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px; }
+  .urssaf-estimate-head span{ font-size:13px; font-weight:700; color:var(--accent-ink); }
+  .urssaf-estimate-total{ font-size:27px; font-weight:800; color:var(--accent-ink); font-family:'IBM Plex Mono', monospace; }
+  .urssaf-estimate-detail{ display:flex; gap:18px; margin-top:8px; font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap; }
+  .urssaf-estimate-detail b{ color:var(--ink); font-family:'IBM Plex Mono', monospace; }
+  .urssaf-estimate-note{ font-size:11px; color:var(--ink-faint); margin-top:10px; }
+
+  /* ---- automatic batch reading ---- */
+  .dropzone{
+    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    border:1.5px dashed var(--line-strong); border-radius:12px; padding:22px 14px; cursor:pointer;
+    text-align:center; color:var(--ink-soft); background:var(--card-soft); margin-bottom:12px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .dropzone:hover, .dropzone.dragover{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); }
+  .dropzone-icon{ font-size:20px; }
+  .dropzone-text strong{ color:var(--ink); }
+  .dropzone-sub{ font-size:11px; color:var(--ink-faint); }
+  /* Visually hidden but still laid out / interactive — display:none on a file input
+     is unreliable for opening the native picker on some mobile browsers. */
+  .visually-hidden-file{
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; opacity:0;
+  }
+
+  .batch-actions{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; font-size:12.5px; color:var(--ink-soft); }
+  .batch-actions[hidden]{ display:none; }
+  .btn-primary.small{ padding:7px 11px; font-size:12.5px; margin-top:0; }
+
+  .batch-results{ display:flex; flex-direction:column; gap:10px; }
+  .batch-item{ border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--card-soft); }
+  .batch-item-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .batch-item-name{ font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .batch-item-status{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:2px 8px; border-radius:20px; flex:0 0 auto; }
+  .batch-item-status.reading{ background:var(--accent-soft); color:var(--accent-ink); }
+  .batch-item-status.ok{ background:var(--ok-soft); color:var(--ok); }
+  .batch-item-status.error{ background:var(--danger-soft); color:var(--danger); }
+  .batch-item-fields{ display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:10px; }
+  .batch-item-fields input{
+    padding:7px 8px; border:1px solid var(--line); border-radius:7px; background:var(--card); color:var(--ink);
+    font-size:12.5px; font-family:'Public Sans', sans-serif;
+  }
+  .batch-item-fields .bi-date, .batch-item-fields .bi-vente, .batch-item-fields .bi-presta{ font-family:'IBM Plex Mono', monospace; }
+  .bi-amount-label{ display:flex; flex-direction:column; gap:3px; font-size:11px; font-weight:600; color:var(--ink-soft); }
+  .batch-item-fields .bi-vente{ border-left:3px solid var(--accent); }
+  .batch-item-fields .bi-presta{ border-left:3px solid var(--warn); }
+  .batch-item-error{ font-size:12px; color:var(--danger); margin-bottom:8px; }
+  .batch-item-actions{ display:flex; justify-content:flex-end; gap:12px; align-items:center; }
+  .batch-item-rawtext{ margin-bottom:10px; }
+  .batch-item-rawtext summary{ font-size:11.5px; color:var(--ink-soft); cursor:pointer; font-weight:600; }
+  .batch-item-rawtext pre{
+    margin:6px 0 0; padding:8px 9px; background:var(--card); border:1px solid var(--line); border-radius:7px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); white-space:pre-wrap;
+    word-break:break-word; max-height:180px; overflow-y:auto;
+  }
+  .batch-note{ font-size:12px; color:var(--ink-soft); margin-top:4px; padding:10px 12px; background:var(--card-soft); border-radius:8px; }
+  .batch-consent-note{ font-size:11.5px; color:var(--ink-faint); margin:-6px 0 12px; }
+
+  .field-hint{ font-size:11px; font-weight:400; color:var(--ink-faint); }
+
+  .btn-primary{
+    margin-top:4px; border:none; background:var(--accent); color:#fff; font-weight:700; font-size:13.5px;
+    padding:11px 14px; border-radius:9px; cursor:pointer;
+  }
+  .btn-primary:hover{ background:var(--accent-ink); }
+  .btn-primary:disabled{ opacity:0.55; cursor:not-allowed; }
+
+  /* ---- invoices list ---- */
+  .invoices-card{ flex:1; display:flex; flex-direction:column; min-height:0; }
+  #invoices-search{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--card-soft);
+    color:var(--ink); font-size:13.5px; margin-bottom:12px;
+  }
+  #invoices-search:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .invoices-list{ display:flex; flex-direction:column; gap:1px; max-height:560px; overflow-y:auto; overflow-x:hidden; border-radius:10px; }
+  .invoices-empty{ padding:26px 10px; text-align:center; color:var(--ink-faint); font-size:13px; }
+  .invoices-empty strong{ display:block; color:var(--ink-soft); font-size:14px; margin-bottom:4px; font-weight:600; }
+  .invoice-row{ padding:12px 4px; border-bottom:1px solid var(--line); background:var(--card); }
+  .invoice-row:last-child{ border-bottom:none; }
+  .invoice-row-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .inv-id{ display:flex; align-items:baseline; gap:8px; min-width:0; }
+  .inv-number{ font-size:13.5px; font-weight:700; color:var(--ink); white-space:nowrap; }
+  .inv-date{ font-size:11.5px; color:var(--ink-faint); white-space:nowrap; }
+  .inv-total{ font-size:15px; font-weight:700; color:var(--ink); white-space:nowrap; }
+  .invoice-row-bottom{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .inv-tags{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; min-width:0; }
+  .inv-client{ font-size:12.5px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px; }
+  .inv-tag{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+  .inv-tag.vente{ background:var(--accent-soft); color:var(--accent-ink); }
+  .inv-tag.prestation{ background:var(--warn-soft); color:var(--warn); }
+  .inv-del{
+    border:none; background:none; color:var(--ink-faint); font-size:12px; font-weight:600; cursor:pointer;
+    padding:4px 8px; border-radius:6px; flex:0 0 auto;
+  }
+  .inv-del:hover{ background:var(--danger-soft); color:var(--danger); }
+
+  .export-row{ display:flex; justify-content:flex-end; }
+
+  ::selection{ background:var(--accent-soft); }
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .gauge-fill{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <path d="M6 34a18 18 0 0 1 36 0" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+        <circle cx="24" cy="34" r="2.6" fill="currentColor"/>
+        <path d="M24 34 L33 20" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M6 34h3M39 34h3M24 12v3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <div>
+        <h1>Seuil</h1>
+        <p class="tagline">Déposez vos factures déjà émises — vente &amp; prestation — pour la déclaration URSSAF</p>
+      </div>
+    </div>
+    <div class="sync-state"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">Connexion…</span></div>
+  </header>
+
+  <main class="layout">
+    <section class="col-primary">
+      <div class="card">
+        <h2>Lire des factures automatiquement</h2>
+        <p class="form-hint">Déposez le <strong>PDF</strong> de vos factures déjà émises avec votre logiciel : le texte est détecté directement dans votre navigateur, puis une estimation de la part fourniture / pièce et de la part prestation / main d'œuvre est proposée à partir de mots-clés. C'est une estimation à vérifier — relisez et corrigez avant de déposer. Seule la première page est lue. Les photos/captures d'écran sont acceptées mais la lecture automatique n'y fonctionne pas encore de façon fiable (moteur de reconnaissance d'image bloqué par les restrictions de sécurité du navigateur) — préférez le PDF exporté par votre logiciel de facturation.</p>
+
+        <div class="dropzone" id="batch-dropzone" role="button" tabindex="0">
+          <input type="file" id="batch-file-input" class="visually-hidden-file" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple>
+          <span class="dropzone-icon" aria-hidden="true">⇪</span>
+          <span class="dropzone-text"><strong>Choisir des fichiers</strong> ou glisser-déposer ici</span>
+          <span class="dropzone-sub">PDF recommandé — JPEG, PNG, WebP, GIF acceptés mais non fiables</span>
+        </div>
+        <p class="batch-consent-note">Traitement 100 % local dans votre navigateur : rien n'est envoyé à un serveur.</p>
+
+        <div class="batch-actions" id="batch-actions" hidden>
+          <span id="batch-file-count"></span>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="link-btn" id="batch-stop" style="margin-top:0;display:none;">Arrêter</button>
+            <button type="button" class="btn-primary small" id="batch-start">Lire les factures</button>
+          </div>
+        </div>
+
+        <div class="batch-actions" id="batch-bulk-actions" hidden>
+          <span id="batch-bulk-count"></span>
+          <button type="button" class="btn-primary small" id="batch-confirm-all">Déposer tout</button>
+        </div>
+
+        <div class="batch-results" id="batch-results"></div>
+        <div class="batch-note" id="batch-note" hidden></div>
+      </div>
+    </section>
+
+    <section class="col-secondary">
+      <div class="card">
+        <div class="card-head">
+          <h2>Seuils de TVA — franchise en base</h2>
+          <div class="year-nav">
+            <button id="year-prev" type="button" aria-label="Année précédente">‹</button>
+            <span id="year-label" class="num"></span>
+            <button id="year-next" type="button" aria-label="Année suivante">›</button>
+          </div>
+        </div>
+        <div class="gauges" id="gauges"></div>
+        <button class="link-btn" id="toggle-thresholds" type="button">Modifier les seuils légaux</button>
+        <div class="thresholds-editor" id="thresholds-editor" hidden>
+          <div class="grid4">
+            <div><label for="t-vente-base">Vente — seuil de base (€)</label><input id="t-vente-base" type="number" min="0" step="100"></div>
+            <div><label for="t-vente-majore">Vente — seuil majoré (€)</label><input id="t-vente-majore" type="number" min="0" step="100"></div>
+            <div><label for="t-presta-base">Prestation — seuil de base (€)</label><input id="t-presta-base" type="number" min="0" step="100"></div>
+            <div><label for="t-presta-majore">Prestation — seuil majoré (€)</label><input id="t-presta-majore" type="number" min="0" step="100"></div>
+          </div>
+          <button class="btn-primary" id="save-thresholds" type="button" style="margin-top:0;">Enregistrer les seuils</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Déclaration URSSAF</h2>
+        </div>
+        <div class="period-controls" style="margin-bottom:16px;">
+          <div class="segmented" id="period-mode">
+            <button type="button" data-mode="month" class="active">Mensuel</button>
+            <button type="button" data-mode="quarter">Trimestriel</button>
+          </div>
+          <div class="year-nav">
+            <button id="period-prev" type="button" aria-label="Période précédente">‹</button>
+            <span id="period-label" class="num"></span>
+            <button id="period-next" type="button" aria-label="Période suivante">›</button>
+          </div>
+        </div>
+        <div class="urssaf-stats" id="urssaf-stats"></div>
+
+        <div class="urssaf-estimate">
+          <div class="urssaf-estimate-head">
+            <span>Estimation des cotisations à payer</span>
+            <button class="link-btn" id="toggle-cotis-rates" type="button" style="margin-top:0;">Modifier les taux</button>
+          </div>
+          <div class="urssaf-estimate-total" id="urssaf-estimate-total">0 €</div>
+          <div class="urssaf-estimate-detail" id="urssaf-estimate-detail"></div>
+          <p class="urssaf-estimate-note">Estimation indicative sur la base de vos taux ci-dessous (cotisations + CFP + taxes CMA) — elle ne remplace pas le calcul officiel de votre espace URSSAF (versement libératoire, ACRE ou régime spécifique non pris en compte). Mettez un taux à 0 s'il ne s'applique pas à votre situation (ex : taxes CMA propres aux artisans, absentes pour un commerçant relevant de la CCI).</p>
+          <div class="thresholds-editor" id="cotis-rates-editor" hidden>
+            <div class="grid4">
+              <div><label for="tx-vente">Taux vente de marchandises (%)</label><input id="tx-vente" type="number" min="0" max="100" step="0.01"></div>
+              <div><label for="tx-presta">Taux prestations de services (%)</label><input id="tx-presta" type="number" min="0" max="100" step="0.01"></div>
+              <div><label for="tx-cfp">CFP — formation professionnelle (%)</label><input id="tx-cfp" type="number" min="0" max="100" step="0.01"></div>
+              <div><label for="tx-cma-vente">Taxe CMA vente (%)</label><input id="tx-cma-vente" type="number" min="0" max="100" step="0.01"></div>
+              <div><label for="tx-cma-presta">Taxe CMA prestation (%)</label><input id="tx-cma-presta" type="number" min="0" max="100" step="0.01"></div>
+            </div>
+            <button class="btn-primary" id="save-cotis-rates" type="button" style="margin-top:0;">Enregistrer les taux</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card invoices-card">
+        <div class="card-head">
+          <h2>Factures déposées</h2>
+        </div>
+        <input type="search" id="invoices-search" placeholder="Filtrer par numéro ou client…">
+        <div class="invoices-list" id="invoices-list"></div>
+        <div class="export-row" style="margin-top:12px;">
+          <button class="link-btn" id="export-csv" type="button" style="margin-top:0;">Exporter en CSV</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var DEFAULT_THRESHOLDS = {
+    venteSeuilBase: 85000, venteSeuilMajore: 93500,
+    prestationSeuilBase: 37500, prestationSeuilMajore: 41250,
+    // Taux de cotisations sociales URSSAF 2026 pour un auto-entrepreneur (hors ACRE) —
+    // vente de marchandises / prestations de services commerciales ou artisanales (BIC).
+    venteTauxCotisation: 12.3, prestationTauxCotisation: 21.2,
+    // Frais additionnels prélevés avec les cotisations mais souvent oubliés dans une estimation
+    // rapide — CFP (formation professionnelle, sur le CA total) et taxes CMA (chambre de métiers
+    // et de l'artisanat, propres aux artisans, distinctes pour la vente et la prestation).
+    // Mettre à 0 si non applicable (ex : commerçant relevant de la CCI plutôt que de la CMA).
+    cfpTaux: 0.30, cmaVenteTaux: 0.22, cmaPrestaTaux: 0.48
+  };
+  var LOCAL_KEY = 'seuil-calculateur-store-v3';
+
+  var state = {
+    invoices: {},          // id -> {number, date, client, venteAmount, prestationAmount}
+    thresholds: Object.assign({}, DEFAULT_THRESHOLDS),
+    backend: null,         // 'db' | 'local' | null (loading)
+    year: new Date().getFullYear(),
+    periodMode: 'month',
+    periodRef: new Date(),
+    searchQuery: ''
+  };
+
+  var db = null;
+  var downloads = null;
+  var pendingFiles = [];
+  var batchAbort = null;
+
+  // ---------------- storage backends ----------------
+  function readLocal(){
+    try{
+      var raw = localStorage.getItem(LOCAL_KEY);
+      if(!raw) return { invoices:{}, thresholds:null };
+      var parsed = JSON.parse(raw);
+      return { invoices: parsed.invoices || {}, thresholds: parsed.thresholds || null };
+    }catch(e){ return { invoices:{}, thresholds:null }; }
+  }
+  function writeLocal(){
+    try{
+      localStorage.setItem(LOCAL_KEY, JSON.stringify({ invoices: state.invoices, thresholds: state.thresholds }));
+    }catch(e){ /* private mode / quota: silently ignore */ }
+  }
+  function uid(){ return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  function setSyncState(mode){
+    var dot = document.getElementById('sync-dot');
+    var text = document.getElementById('sync-text');
+    if(mode === 'db'){ dot.className = 'sync-dot live'; text.textContent = 'Enregistré et synchronisé'; }
+    else if(mode === 'local'){ dot.className = 'sync-dot local'; text.textContent = 'Enregistré sur cet appareil'; }
+    else { dot.className = 'sync-dot'; text.textContent = 'Connexion…'; }
+  }
+
+  function initLocalBackend(){
+    var loaded = readLocal();
+    state.invoices = loaded.invoices;
+    state.thresholds = Object.assign({}, DEFAULT_THRESHOLDS, loaded.thresholds || {});
+    state.backend = 'local';
+    setSyncState('local');
+    fillThresholdInputs();
+    renderAll();
+  }
+
+  function initDbBackend(){
+    state.backend = 'db';
+    setSyncState('db');
+    db.collection('invoices').orderBy('date', 'desc').limit(1000).onSnapshot(function(snap){
+      var next = {};
+      snap.docs.forEach(function(d){
+        var data = d.data();
+        if(!data) return;
+        next[d.id] = { number: data.number, date: data.date, client: data.client, venteAmount: data.venteAmount, prestationAmount: data.prestationAmount };
+      });
+      state.invoices = next;
+      renderAll();
+    }, function(err){ console.error('invoices subscription error', err); });
+    db.doc('settings/thresholds').onSnapshot(function(snap){
+      var data = snap.exists ? snap.data() : null;
+      state.thresholds = Object.assign({}, DEFAULT_THRESHOLDS, data || {});
+      renderGauges();
+      renderUrssaf();
+      fillThresholdInputs();
+    }, function(err){ console.error('settings subscription error', err); });
+  }
+
+  // ---------------- CRUD ----------------
+  function addInvoice(invoice){
+    if(state.backend === 'db'){
+      return db.collection('invoices').add(invoice).catch(function(e){
+        console.error('add invoice failed', e);
+        throw e;
+      });
+    }
+    var id = uid();
+    state.invoices[id] = invoice;
+    writeLocal();
+    renderAll();
+    return Promise.resolve();
+  }
+  function deleteInvoice(id){
+    if(state.backend === 'db'){
+      db.doc('invoices/' + id).delete().catch(function(e){ console.error('delete failed', e); });
+      return;
+    }
+    delete state.invoices[id];
+    writeLocal();
+    renderAll();
+  }
+  function saveThresholds(t){
+    if(state.backend === 'db'){
+      db.doc('settings/thresholds').set(t).catch(function(e){ console.error('save thresholds failed', e); });
+      return;
+    }
+    state.thresholds = t;
+    writeLocal();
+    renderGauges();
+    renderUrssaf();
+  }
+
+  // ---------------- formatting ----------------
+  function fmtEuro(v){
+    v = Math.round((v || 0) * 100) / 100;
+    return v.toLocaleString('fr-FR', { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 }) + ' €';
+  }
+  function fmtDateShort(iso){
+    if(!iso) return '—';
+    var parts = iso.split('-');
+    var d = new Date(+parts[0], +parts[1]-1, +parts[2]);
+    return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' });
+  }
+  var MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  function escapeHtml(s){
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function invoicesList(){ return Object.keys(state.invoices).map(function(id){ return Object.assign({ id: id }, state.invoices[id]); }); }
+  function invoiceTotalByType(inv, type){
+    return type === 'vente' ? (Number(inv.venteAmount) || 0) : (Number(inv.prestationAmount) || 0);
+  }
+  function invoiceTotal(inv){ return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0); }
+
+  // ---------------- gauges ----------------
+  function annualTotal(year, category){
+    var start = year + '-01-01', end = year + '-12-31';
+    return invoicesList()
+      .filter(function(i){ return i.date >= start && i.date <= end; })
+      .reduce(function(s, i){ return s + invoiceTotalByType(i, category); }, 0);
+  }
+
+  function gaugeHtml(label, total, base, majore){
+    var pct = majore > 0 ? Math.min(100, (total / majore) * 100) : 0;
+    var markerPct = majore > 0 ? Math.min(100, (base / majore) * 100) : 0;
+    var state_ = 'ok';
+    if(total >= majore) state_ = 'over';
+    else if(total >= base) state_ = 'warn';
+    var statusText = state_ === 'over'
+      ? 'Seuil majoré dépassé (' + fmtEuro(majore) + ') — la TVA est applicable dès le 1ᵉʳ jour du mois de dépassement.'
+      : state_ === 'warn'
+        ? 'Seuil de base dépassé — encore ' + fmtEuro(majore - total) + ' avant le seuil majoré (' + fmtEuro(majore) + ').'
+        : 'En dessous du seuil de base — encore ' + fmtEuro(base - total) + ' de marge.';
+    return (
+      '<div class="gauge-row">' +
+        '<div class="gauge-top"><span class="gauge-label">' + escapeHtml(label) + '</span><span class="gauge-value">' + fmtEuro(total) + ' cumulés</span></div>' +
+        '<div class="gauge-track"><div class="gauge-fill ' + (state_ !== 'ok' ? state_ : '') + '" style="width:' + pct + '%;"></div><div class="gauge-marker" style="left:' + markerPct + '%;"></div></div>' +
+        '<div class="gauge-limits"><span>Seuil de base ' + fmtEuro(base) + '</span><span>Seuil majoré ' + fmtEuro(majore) + '</span></div>' +
+        '<div class="gauge-status ' + state_ + '">' + statusText + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderGauges(){
+    document.getElementById('year-label').textContent = state.year;
+    var t = state.thresholds;
+    var totVente = annualTotal(state.year, 'vente');
+    var totPresta = annualTotal(state.year, 'prestation');
+    document.getElementById('gauges').innerHTML =
+      gaugeHtml('Vente de marchandises', totVente, t.venteSeuilBase, t.venteSeuilMajore) +
+      gaugeHtml('Prestations de services', totPresta, t.prestationSeuilBase, t.prestationSeuilMajore);
+  }
+
+  function fillThresholdInputs(){
+    document.getElementById('t-vente-base').value = state.thresholds.venteSeuilBase;
+    document.getElementById('t-vente-majore').value = state.thresholds.venteSeuilMajore;
+    document.getElementById('t-presta-base').value = state.thresholds.prestationSeuilBase;
+    document.getElementById('t-presta-majore').value = state.thresholds.prestationSeuilMajore;
+    document.getElementById('tx-vente').value = state.thresholds.venteTauxCotisation;
+    document.getElementById('tx-presta').value = state.thresholds.prestationTauxCotisation;
+    document.getElementById('tx-cfp').value = state.thresholds.cfpTaux;
+    document.getElementById('tx-cma-vente').value = state.thresholds.cmaVenteTaux;
+    document.getElementById('tx-cma-presta').value = state.thresholds.cmaPrestaTaux;
+  }
+
+  // ---------------- URSSAF period summary ----------------
+  function quarterOf(m){ return Math.floor(m / 3); }
+  function isoDate(d){
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function periodRange(){
+    var y = state.periodRef.getFullYear(), m = state.periodRef.getMonth();
+    if(state.periodMode === 'quarter'){
+      var sm = quarterOf(m) * 3;
+      return [isoDate(new Date(y, sm, 1)), isoDate(new Date(y, sm + 3, 0))];
+    }
+    return [isoDate(new Date(y, m, 1)), isoDate(new Date(y, m + 1, 0))];
+  }
+  function periodLabel(){
+    var y = state.periodRef.getFullYear(), m = state.periodRef.getMonth();
+    if(state.periodMode === 'quarter') return 'T' + (quarterOf(m) + 1) + ' ' + y;
+    return MONTHS[m] + ' ' + y;
+  }
+  function shiftPeriod(dir){
+    var step = state.periodMode === 'quarter' ? 3 : 1;
+    state.periodRef = new Date(state.periodRef.getFullYear(), state.periodRef.getMonth() + dir * step, 1);
+    renderUrssaf();
+  }
+  function renderUrssaf(){
+    var range = periodRange(), start = range[0], end = range[1];
+    var inPeriod = invoicesList().filter(function(i){ return i.date >= start && i.date <= end; });
+    var totVente = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'vente'); }, 0);
+    var totPresta = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'prestation'); }, 0);
+    document.getElementById('period-label').textContent = periodLabel();
+    document.getElementById('urssaf-stats').innerHTML =
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente) + '</div><div class="stat-label">Ventes de marchandises</div></div>' +
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totPresta) + '</div><div class="stat-label">Prestations de services</div></div>' +
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente + totPresta) + '</div><div class="stat-label">Total période (' + inPeriod.length + ' facture' + (inPeriod.length > 1 ? 's' : '') + ')</div></div>';
+
+    var t = state.thresholds;
+    var cotisVente = totVente * (t.venteTauxCotisation || 0) / 100;
+    var cotisPresta = totPresta * (t.prestationTauxCotisation || 0) / 100;
+    var cfp = (totVente + totPresta) * (t.cfpTaux || 0) / 100;
+    var cmaVente = totVente * (t.cmaVenteTaux || 0) / 100;
+    var cmaPresta = totPresta * (t.cmaPrestaTaux || 0) / 100;
+    var totalDu = cotisVente + cotisPresta + cfp + cmaVente + cmaPresta;
+    document.getElementById('urssaf-estimate-total').textContent = fmtEuro(totalDu);
+    document.getElementById('urssaf-estimate-detail').innerHTML =
+      '<span>📦 Vente (' + t.venteTauxCotisation + ' %) : <b>' + fmtEuro(cotisVente) + '</b></span>' +
+      '<span>🔧 Prestation (' + t.prestationTauxCotisation + ' %) : <b>' + fmtEuro(cotisPresta) + '</b></span>' +
+      '<span>🎓 CFP (' + t.cfpTaux + ' %) : <b>' + fmtEuro(cfp) + '</b></span>' +
+      '<span>🏛️ Taxe CMA vente (' + t.cmaVenteTaux + ' %) : <b>' + fmtEuro(cmaVente) + '</b></span>' +
+      '<span>🏛️ Taxe CMA prestation (' + t.cmaPrestaTaux + ' %) : <b>' + fmtEuro(cmaPresta) + '</b></span>';
+  }
+
+  // ---------------- invoices list ----------------
+  function renderInvoicesList(){
+    var list = invoicesList().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.number||'').localeCompare(a.number||''); });
+    var q = state.searchQuery.trim().toLowerCase();
+    if(q) list = list.filter(function(i){ return ((i.number||'')+' '+(i.client||'')).toLowerCase().indexOf(q) !== -1; });
+    var el = document.getElementById('invoices-list');
+    if(list.length === 0){
+      el.innerHTML = '<div class="invoices-empty"><strong>' + (q ? 'Aucun résultat' : 'Aucune facture déposée') + '</strong>' +
+        (q ? 'Aucune facture ne correspond à « ' + escapeHtml(state.searchQuery.trim()) + ' ».' : 'Déposez votre première facture ci-contre.') + '</div>';
+      return;
+    }
+    el.innerHTML = list.map(function(i){
+      var totVente = invoiceTotalByType(i, 'vente');
+      var totPresta = invoiceTotalByType(i, 'prestation');
+      var tags = '';
+      if(totVente > 0) tags += '<span class="inv-tag vente">Vente ' + fmtEuro(totVente) + '</span>';
+      if(totPresta > 0) tags += '<span class="inv-tag prestation">Prestation ' + fmtEuro(totPresta) + '</span>';
+      return '<div class="invoice-row" data-id="' + i.id + '">' +
+        '<div class="invoice-row-top">' +
+          '<span class="inv-id"><span class="inv-number">' + escapeHtml(i.number || 'Sans référence') + '</span><span class="inv-date">' + fmtDateShort(i.date) + '</span></span>' +
+          '<span class="inv-total">' + fmtEuro(invoiceTotal(i)) + '</span>' +
+        '</div>' +
+        '<div class="invoice-row-bottom">' +
+          '<span class="inv-tags">' + (i.client ? '<span class="inv-client">' + escapeHtml(i.client) + '</span>' : '') + tags + '</span>' +
+          '<button class="inv-del" data-id="' + i.id + '">Supprimer</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    el.querySelectorAll('.inv-del').forEach(function(btn){
+      btn.addEventListener('click', function(){ deleteInvoice(btn.getAttribute('data-id')); });
+    });
+  }
+
+  function renderAll(){
+    renderGauges();
+    renderUrssaf();
+    renderInvoicesList();
+  }
+
+  // ---------------- CSV export ----------------
+  function toCsv(){
+    var rows = [['Numéro','Date','Client','Vente (€)','Prestation (€)','Total (€)']];
+    invoicesList().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }).forEach(function(inv){
+      rows.push([
+        inv.number || '', inv.date || '', inv.client || '',
+        (Number(inv.venteAmount)||0).toFixed(2).replace('.', ','),
+        (Number(inv.prestationAmount)||0).toFixed(2).replace('.', ','),
+        invoiceTotal(inv).toFixed(2).replace('.', ',')
+      ]);
+    });
+    return rows.map(function(r){
+      return r.map(function(cell){
+        var s = String(cell);
+        return /[";\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+      }).join(';');
+    }).join('\r\n');
+  }
+
+  // ---------------- automatic reading (local OCR, no server / no Claude call) ----------------
+  var PDFJS_VERSION = '2.16.105';
+  var TESSERACT_VERSION = '5.1.1';
+
+  function fileExt(name){ return ((name||'').split('.').pop() || '').toLowerCase(); }
+  function isPdfFile(file){ return file.type === 'application/pdf' || fileExt(file.name) === 'pdf'; }
+
+  function loadPdfJs(){
+    if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VERSION + '/pdf.min.js';
+      s.onload = function(){
+        if(done) return; done = true;
+        if(!window.pdfjsLib){ reject(new Error('pdfjs_missing')); return; }
+        // Deliberately NOT setting GlobalWorkerOptions.workerSrc: without it, pdf.js falls
+        // back to its "fake worker" mode and runs entirely on the main thread using the code
+        // already loaded above, instead of fetching a separate pdf.worker.min.js — avoiding
+        // the kind of extra runtime fetch that blocked the OCR engine.
+        resolve(window.pdfjsLib);
+      };
+      s.onerror = function(){ if(done) return; done = true; reject(new Error('pdfjs_load_failed')); };
+      document.head.appendChild(s);
+      setTimeout(function(){ if(done) return; done = true; reject(new Error('pdfjs_timeout')); }, 10000);
+    });
+  }
+
+  function loadPdfFirstPage(file){
+    return loadPdfJs().then(function(pdfjsLib){
+      return file.arrayBuffer();
+    }).then(function(buf){
+      return window.pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function(pdf){
+      return pdf.getPage(1);
+    });
+  }
+
+  /* Digital PDFs (generated straight by invoicing software, as opposed to a scanned photo)
+     carry their own text layer — read it directly, no OCR involved and far more reliable.
+     Keeps each word's X position too: a table with "Fourniture / Prestation" as COLUMN
+     HEADERS (rather than repeated on every row) can still be read correctly by matching
+     each amount's position to whichever header it sits under. */
+  function pdfFirstPageText(file){
+    return loadPdfFirstPage(file).then(function(page){
+      return page.getTextContent();
+    }).then(function(content){
+      var rows = {};
+      (content.items || []).forEach(function(item){
+        if(!item.str) return;
+        // Bucket to the nearest 3pt rather than the exact value: items on the same visual
+        // row can carry slightly different baselines (sub/superscript, mixed font sizes),
+        // and 3pt is still well under typical line spacing so separate rows don't merge.
+        var y = Math.round(item.transform[5] / 3) * 3;
+        if(!rows[y]) rows[y] = [];
+        rows[y].push({ x: item.transform[4], str: item.str });
+      });
+      var lines = Object.keys(rows).map(Number).sort(function(a, b){ return b - a; }) // top to bottom
+        .map(function(y){
+          var tokens = rows[y].sort(function(a, b){ return a.x - b.x; });
+          return { tokens: tokens, text: tokens.map(function(t){ return t.str; }).join(' ') };
+        });
+      return { text: lines.map(function(l){ return l.text; }).join('\n'), lines: lines };
+    });
+  }
+
+  function pdfFirstPageToBlob(file){
+    return loadPdfFirstPage(file).then(function(page){
+        var viewport = page.getViewport({ scale: 2 });
+        var canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        var ctx = canvas.getContext('2d');
+        return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function(){
+          return new Promise(function(resolve, reject){
+            canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('canvas_empty')); }, 'image/png');
+          });
+        });
+      });
+  }
+
+  /* Re-encode any picked image through canvas as a downsized JPEG before OCR — normalizes
+     odd formats (a phone photo is very often HEIC/HEIF) and keeps recognition fast. */
+  function normalizeImageForOcr(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        var maxSide = 2000; // a bit more headroom than before: OCR benefits from resolution
+        var scale = Math.min(1, maxSide / Math.max(w, h));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('canvas_empty')); }, 'image/jpeg', 0.92);
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('image_decode_failed')); };
+      img.src = url;
+    });
+  }
+
+  /* ---- Tesseract.js: text recognition entirely in the browser (no server, no Claude call) ---- */
+  function loadTesseract(){
+    if(window.Tesseract) return Promise.resolve(window.Tesseract);
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@' + TESSERACT_VERSION + '/dist/tesseract.min.js';
+      s.onload = function(){ if(done) return; done = true; window.Tesseract ? resolve(window.Tesseract) : reject(new Error('tesseract_missing')); };
+      s.onerror = function(){ if(done) return; done = true; reject(new Error('tesseract_load_failed')); };
+      document.head.appendChild(s);
+      setTimeout(function(){ if(done) return; done = true; reject(new Error('tesseract_timeout')); }, 10000);
+    });
+  }
+
+  function withTimeout(promise, ms, message){
+    return new Promise(function(resolve, reject){
+      var t = setTimeout(function(){ reject(new Error(message)); }, ms);
+      promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
+    });
+  }
+
+  var tesseractWorkerPromise = null;
+  function getTesseractWorker(){
+    if(tesseractWorkerPromise) return tesseractWorkerPromise;
+    tesseractWorkerPromise = loadTesseract().then(function(Tesseract){
+      return withTimeout(Tesseract.createWorker('fra'), 45000, 'tesseract_engine_timeout');
+    }).catch(function(err){
+      tesseractWorkerPromise = null; // allow a later file to try again
+      throw err;
+    });
+    return tesseractWorkerPromise;
+  }
+
+  function ocrImageBlob(imageBlob){
+    return getTesseractWorker().then(function(worker){
+      return withTimeout(worker.recognize(imageBlob), 45000, 'ocr_timeout');
+    }).then(function(result){
+      return (result && result.data && result.data.text) || '';
+    });
+  }
+
+  /* PDF from an invoicing app almost always carries a real text layer — read that directly
+     first (fast, exact, no OCR engine involved at all). Only fall back to rendering the page
+     to an image and running OCR on it if the text layer is missing or too sparse (a scanned
+     PDF with no embedded text). A plain image always goes through OCR. */
+  function extractTextFromFile(file){
+    if(isPdfFile(file)){
+      // Object result ({text, lines}) = read from the PDF's own text layer, keeps per-word
+      // X positions for column-aware parsing. Plain string = OCR fallback (no coordinates).
+      return pdfFirstPageText(file).then(function(doc){
+        if(doc.text && doc.text.trim().length >= 20) return doc;
+        return pdfFirstPageToBlob(file).then(ocrImageBlob);
+      });
+    }
+    return normalizeImageForOcr(file).catch(function(){ return file; }).then(ocrImageBlob);
+  }
+
+  var ENGINE_ERROR_MESSAGES = ['tesseract_missing', 'tesseract_load_failed', 'tesseract_timeout', 'tesseract_engine_timeout'];
+  function isEngineError(err){ return !!err && ENGINE_ERROR_MESSAGES.indexOf(err.message) !== -1; }
+
+  /* ---- heuristic parsing of the raw OCR text: best-effort, always reviewed before saving ---- */
+  function stripAccents(s){
+    return (s || '')
+      .replace(/\u0153/g, 'oe').replace(/\u0152/g, 'OE').replace(/\u00e6/g, 'ae').replace(/\u00c6/g, 'AE')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u2018\u2019\u02bc`\u00b4']/g, '');
+  }
+  // A precise, exhaustive list of every product name a business could ever sell is impossible
+  // (unlike labor wording, which is a bounded vocabulary — see the fallback in parseInvoiceText
+  // below). This list mainly helps findHeaderColumns recognize a genuine two-column header; it
+  // mixes generic goods vocabulary with terms specific to phone/electronics repair, since that's
+  // this business's activity.
+  var VENTE_KEYWORDS = ['piece','pieces','piece detachee','pieces detachees','fourniture','fournitures','marchandise','marchandises','produit','produits','article','articles','vente','materiel','materiaux','accessoire','accessoires','consommable','consommables','composant','composants','kit','equipement','equipements','matiere premiere','quincaillerie','ecran','ecrans','vitre','vitres','batterie','batteries','coque','coques','connecteur','connecteurs','chargeur','chargeurs','cable','cables','haut-parleur','haut-parleurs','camera','cameras','carte mere','bouton','boutons','nappe','nappes','capot','capots','boitier','boitiers','protection ecran','film de protection'];
+  var PRESTATION_KEYWORDS = ["main d'oeuvre",'main doeuvre','prestation','prestations','prestation de service','realisation','execution','travaux','travail','intervention','interventions','depannage','assistance','assistance technique','installation','pose','montage','demontage','reparation','reparations','remise en etat','forfait','forfaitaire','diagnostic','expertise','etude','honoraires','conseil','consultation','accompagnement','audit','formation','heure','heures','taux horaire','temps passe','vacation','deplacement','frais de deplacement','service','services','developpement','maintenance','support technique','parametrage','configuration'];
+  var SKIP_LINE_KEYWORDS = ['total','sous-total','sous total','tva','acompte','remise','net a payer','a payer','solde','avoir','arrhes','rabais','ristourne','escompte','net ttc','net ht','a regler','recapitulatif'];
+
+  function lineHasAnyKeyword(line, keywords){
+    var norm = stripAccents(line.toLowerCase()).replace(/[\s-]+/g, '');
+    return keywords.some(function(k){ return norm.indexOf(stripAccents(k).replace(/[\s-]+/g, '')) !== -1; });
+  }
+  function extractAmounts(line){
+    var amounts = [];
+    var m;
+    // Preferred: a number with an explicit currency marker right next to it.
+    var reCurrency = /(\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.](\d{2}))?\s*(?:€|eur\b|euros?\b)/gi;
+    while((m = reCurrency.exec(line))){
+      var val = parseFloat(m[1].replace(/[ .]/g, '') + '.' + (m[2] || '00'));
+      if(isFinite(val)) amounts.push(val);
+    }
+    if(amounts.length > 0) return amounts;
+    // Fallback: a bare amount with exactly two decimals (typical currency formatting) and
+    // no adjacent € — common when a table lists amounts under a "Montant (€)" column header
+    // instead of repeating the symbol on every row.
+    var reBare = /\b(\d{1,3}(?:[ .]\d{3})*|\d+)[,.](\d{2})\b/g;
+    while((m = reBare.exec(line))){
+      var val2 = parseFloat(m[1].replace(/[ .]/g, '') + '.' + m[2]);
+      if(isFinite(val2)) amounts.push(val2);
+    }
+    return amounts;
+  }
+  function parseInvoiceText(text){
+    var lines = (text || '').split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+    var vente = 0, prestation = 0;
+    lines.forEach(function(line){
+      if(lineHasAnyKeyword(line, SKIP_LINE_KEYWORDS)) return;
+      var amounts = extractAmounts(line);
+      if(amounts.length === 0) return;
+      // A line often shows both a unit price and a line total (e.g. "1  45,00€  45,00€");
+      // take the last amount (conventionally the line total in a left-to-right table)
+      // rather than summing every number found, which would double-count it.
+      var lineValue = amounts[amounts.length - 1];
+      // Product names are far too varied to ever list exhaustively (any écran, batterie, coque,
+      // référence...), whereas labor/service wording is a comparatively bounded vocabulary. So a
+      // priced, non-skipped line that isn't recognized as labor is treated as goods by default —
+      // VENTE_KEYWORDS still helps confirm genuine goods lines but is no longer required to count one.
+      if(lineHasAnyKeyword(line, PRESTATION_KEYWORDS)) prestation += lineValue;
+      else vente += lineValue;
+    });
+
+    var date = null;
+    var dm = (text || '').match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
+    if(dm){
+      var d = +dm[1], mo = +dm[2], y = +dm[3];
+      if(y < 100) y += 2000;
+      if(d >= 1 && d <= 31 && mo >= 1 && mo <= 12) date = y + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    }
+
+    var number = null;
+    // Require an actual "facture n°" / "n°" / "réf" marker — a bare "n" before any word
+    // (very common in French text, e.g. "prestation main...") is not enough on its own.
+    // Require at least one digit in the captured value — otherwise "N° SIREN : 123456789"
+    // matches "SIREN" itself (the label) rather than skipping to the actual number.
+    var nm = (text || '').match(/\b(?:facture\s*n[°ºo]?|n[°ºo]|r[ée]f(?:\.|érence)?)\s*[:\-]?\s*((?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{2,19})\b/i);
+    if(nm) number = nm[1];
+
+    var client = extractClientName(text);
+
+    return { number: number, date: date, client: client, fourniture: Math.round(vente * 100) / 100, prestation: Math.round(prestation * 100) / 100 };
+  }
+
+  var CLIENT_LABEL_RE = /(?:client|factur[ée]\s*[àa]|adress[ée]\s*[àa]|destinataire)\s*[:\-]\s*(.+)/i;
+  var CLIENT_SKIP_WORDS = ['siren','siret','tva','iban','bic','telephone','tel','email','mail','devis','facture',
+    'page','total','sous-total','sous total','date','validite','description','quantite','unite','prix','montant',
+    'france','rue','avenue','boulevard','route','chemin','allee','impasse','sarl','sas','eurl','sasu',
+    'auto-entrepreneur','entrepreneur','atelier','garage','reparateur','societe','cedex','ste'];
+
+  function cleanClientCandidate(s){
+    return (s || '').replace(/\s{2,}.*$/, '').trim().slice(0, 60);
+  }
+
+  // Some invoicing tools label a numeric account/reference as "N° client" or "Code client" —
+  // a match on the word "client" there captures a code, not a name. Reject anything that isn't
+  // mostly letters before trusting a label match.
+  function looksLikeName(s){
+    var t = (s || '').trim();
+    return !!t && /[A-Za-zÀ-ÿ]/.test(t) && !/^[\d\s.,\-\/]+$/.test(t);
+  }
+
+  // A line naming exactly one person: 2-4 capitalized words, no digits, none of the
+  // business/address vocabulary that fills the rest of an invoice header.
+  function isPersonNameLine(line){
+    if(!line || /\d/.test(line) || /[@:]/.test(line)) return false;
+    if(lineHasAnyKeyword(line, CLIENT_SKIP_WORDS)) return false;
+    var words = line.split(/\s+/).filter(Boolean);
+    if(words.length < 2 || words.length > 4) return false;
+    return words.every(function(w){ return /^[A-ZÀ-Ý][\wÀ-ÿ'’.\-]*$/.test(w); });
+  }
+
+  // Product names are as unbounded as VENTE_KEYWORDS itself, so there is no exhaustive keyword
+  // list for "the client's name" — instead we look for how invoices actually format it: either
+  // an explicit label ("Client :", "Facturé à :"...), which wins outright wherever it appears, or
+  // — a pattern seen on real invoices without such a label — a lone "Firstname Lastname"-shaped
+  // line, preferably the first one found after the seller's own contact block (email/phone/SIRET),
+  // since that's where a client's name typically sits just before the document title.
+  function extractClientName(text){
+    var lines = (text || '').split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+
+    for(var i = 0; i < lines.length; i++){
+      var m = lines[i].match(CLIENT_LABEL_RE);
+      if(!m || !m[1]) continue;
+      var labelCandidate = cleanClientCandidate(m[1]);
+      if(looksLikeName(labelCandidate)) return labelCandidate;
+    }
+
+    var afterContactIdx = -1;
+    for(var j = 0; j < lines.length; j++){
+      if(/@|t[ée]l[ée]phone|siren|siret/i.test(lines[j])) afterContactIdx = j;
+    }
+    var firstCandidateIdx = -1, firstAfterContactIdx = -1;
+    for(var k = 1; k < lines.length; k++){ // skip line 0: almost always the seller's own name
+      if(!isPersonNameLine(lines[k])) continue;
+      if(firstCandidateIdx < 0) firstCandidateIdx = k;
+      if(firstAfterContactIdx < 0 && k > afterContactIdx) firstAfterContactIdx = k;
+    }
+    var chosen = firstAfterContactIdx >= 0 ? firstAfterContactIdx : firstCandidateIdx;
+    return chosen >= 0 ? cleanClientCandidate(lines[chosen]) : null;
+  }
+
+  function isAmountToken(str){
+    var s = (str || '').trim().replace(/€$/, '').trim();
+    return /^(?:\d{1,3}(?:[ .]\d{3})*|\d+)[,.]\d{2}$/.test(s);
+  }
+  function amountTokenValue(str){
+    var s = (str || '').trim().replace(/€$/, '').trim();
+    var m = s.match(/^(\d{1,3}(?:[ .]\d{3})*|\d+)[,.](\d{2})$/);
+    return m ? parseFloat(m[1].replace(/[ .]/g, '') + '.' + m[2]) : null;
+  }
+
+  /* A table that names "Fourniture" / "Prestation" once, as COLUMN HEADERS, rather than on
+     every row, can't be read by the per-line keyword heuristic above. When the PDF's text
+     layer gives us each word's X position, find the header row and match every amount below
+     it to whichever column header sits closest on the same horizontal axis. */
+  function findHeaderColumns(lines){
+    for(var i = 0; i < lines.length; i++){
+      var tokens = lines[i].tokens;
+      // A genuine column-header row carries no prices itself — a data row that merely
+      // mentions "pièce" as its unit of measure (extremely common: "1 pièce", "2 pièces")
+      // must not be mistaken for one.
+      if(tokens.some(function(t){ return isAmountToken(t.str); })) continue;
+      var venteTok = null, prestaTok = null;
+      for(var j = 0; j < tokens.length; j++){
+        if(!venteTok && lineHasAnyKeyword(tokens[j].str, VENTE_KEYWORDS)) venteTok = tokens[j];
+        if(!prestaTok && lineHasAnyKeyword(tokens[j].str, PRESTATION_KEYWORDS)) prestaTok = tokens[j];
+      }
+      // Require BOTH column labels on the same line — a much stronger signal of a real
+      // two-column header than a single stray keyword, which a data row could contain too.
+      if(venteTok && prestaTok) return { venteX: venteTok.x, prestaX: prestaTok.x, headerIndex: i };
+    }
+    return null;
+  }
+
+  function parseInvoiceStructured(doc){
+    var header = findHeaderColumns(doc.lines);
+    var meta = parseInvoiceText(doc.text); // date / number still read from the flat text either way
+    if(!header || (header.venteX === null && header.prestaX === null)){
+      return meta; // no usable column header found — the per-line heuristic already ran inside parseInvoiceText
+    }
+    var vente = 0, prestation = 0;
+    doc.lines.forEach(function(line, idx){
+      if(idx === header.headerIndex) return;
+      if(lineHasAnyKeyword(line.text, SKIP_LINE_KEYWORDS)) return;
+      line.tokens.forEach(function(tok){
+        if(!isAmountToken(tok.str)) return;
+        var val = amountTokenValue(tok.str);
+        if(val === null) return;
+        var dVente = header.venteX === null ? Infinity : Math.abs(tok.x - header.venteX);
+        var dPresta = header.prestaX === null ? Infinity : Math.abs(tok.x - header.prestaX);
+        if(dVente <= dPresta) vente += val; else prestation += val;
+      });
+    });
+    return { number: meta.number, date: meta.date, client: meta.client, fourniture: Math.round(vente * 100) / 100, prestation: Math.round(prestation * 100) / 100 };
+  }
+
+  function batchErrorText(err){
+    var msg = err && err.message;
+    if(isEngineError(err)) return "La lecture des photos/scans est bloquée par les restrictions de sécurité du navigateur (pas propre à cet appareil) — utilisez plutôt le PDF exporté par votre logiciel de facturation.";
+    if(msg === 'ocr_timeout') return 'La lecture de ce document a pris trop de temps — réessayez.';
+    if(msg === 'canvas_empty' || msg === 'image_decode_failed') return "Ce fichier n'a pas pu être lu comme image — utilisez le PDF d'origine si possible.";
+    if(msg && /pdf/i.test(msg)) return "La lecture de ce PDF a échoué — réessayez.";
+    return 'Échec de la lecture de ce fichier — réessayez.';
+  }
+
+  function setPendingFiles(fileList){
+    pendingFiles = Array.prototype.slice.call(fileList || []);
+    var actions = document.getElementById('batch-actions');
+    if(pendingFiles.length === 0){ actions.hidden = true; return; }
+    actions.hidden = false;
+    document.getElementById('batch-file-count').textContent =
+      pendingFiles.length + ' fichier' + (pendingFiles.length > 1 ? 's' : '') + ' sélectionné' + (pendingFiles.length > 1 ? 's' : '');
+  }
+
+  function addBatchItemPlaceholder(key, name){
+    var el = document.createElement('div');
+    el.className = 'batch-item';
+    el.setAttribute('data-key', key);
+    el.innerHTML = '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status reading">Lecture…</span></div>';
+    document.getElementById('batch-results').prepend(el);
+  }
+  function findBatchItem(key){ return document.querySelector('.batch-item[data-key="' + key + '"]'); }
+
+  function attachBatchItemActions(el, key, file){
+    var ignoreBtn = el.querySelector('.batch-item-ignore');
+    if(ignoreBtn) ignoreBtn.addEventListener('click', function(){ el.remove(); updateBulkActions(); });
+    var confirmBtn = el.querySelector('.batch-item-confirm');
+    if(confirmBtn) confirmBtn.addEventListener('click', function(){
+      var number = el.querySelector('.bi-number').value.trim();
+      var date = el.querySelector('.bi-date').value;
+      var client = el.querySelector('.bi-client').value.trim();
+      var vente = parseFloat(el.querySelector('.bi-vente').value) || 0;
+      var prestation = parseFloat(el.querySelector('.bi-presta').value) || 0;
+      if(!date || (vente <= 0 && prestation <= 0)){
+        el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
+        return;
+      }
+      confirmBtn.disabled = true;
+      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation })).then(function(){
+        el.remove();
+        updateBulkActions();
+      }).catch(function(){ confirmBtn.disabled = false; });
+    });
+    var retryBtn = el.querySelector('.batch-item-retry');
+    if(retryBtn) retryBtn.addEventListener('click', function(){
+      if(batchAbort) return; // a batch is already running
+      el.remove();
+      updateBulkActions();
+      runBatch([file]);
+    });
+  }
+
+  // Reading 30 invoices one at a time is easy; confirming each with its own click is not — this
+  // lets every successfully-read (and still valid) card be deposited in one action, while a card
+  // missing a date/amount, or still mid-read/errored, is left in place for manual attention.
+  function updateBulkActions(){
+    var bar = document.getElementById('batch-bulk-actions');
+    var confirmButtons = document.querySelectorAll('#batch-results .batch-item-confirm');
+    if(confirmButtons.length === 0){ bar.hidden = true; return; }
+    bar.hidden = false;
+    document.getElementById('batch-bulk-count').textContent =
+      confirmButtons.length + ' facture' + (confirmButtons.length > 1 ? 's' : '') + ' lue' + (confirmButtons.length > 1 ? 's' : '') + ' en attente';
+  }
+
+  document.getElementById('batch-confirm-all').addEventListener('click', function(){
+    var btn = this;
+    var items = Array.prototype.slice.call(document.querySelectorAll('#batch-results .batch-item')).filter(function(el){
+      return !!el.querySelector('.batch-item-confirm');
+    });
+    if(items.length === 0) return;
+    btn.disabled = true;
+    var skipped = 0;
+    function next(i){
+      if(i >= items.length){
+        btn.disabled = false;
+        updateBulkActions();
+        var note = document.getElementById('batch-note');
+        if(skipped > 0){
+          note.hidden = false;
+          note.textContent = skipped + ' facture' + (skipped > 1 ? 's' : '') + ' n’' + (skipped > 1 ? 'ont' : 'a') + ' pas ' + (skipped > 1 ? 'pu' : 'pu') + ' être déposée' + (skipped > 1 ? 's' : '') + ' automatiquement (date ou montant manquant) — vérifiez-la ci-dessus.';
+        }
+        return;
+      }
+      var el = items[i];
+      var date = el.querySelector('.bi-date').value;
+      var vente = parseFloat(el.querySelector('.bi-vente').value) || 0;
+      var prestation = parseFloat(el.querySelector('.bi-presta').value) || 0;
+      if(!date || (vente <= 0 && prestation <= 0)){
+        skipped++;
+        el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
+        next(i + 1);
+        return;
+      }
+      var number = el.querySelector('.bi-number').value.trim();
+      var client = el.querySelector('.bi-client').value.trim();
+      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation }))
+        .then(function(){ el.remove(); })
+        .catch(function(){ skipped++; })
+        .then(function(){ next(i + 1); });
+    }
+    next(0);
+  });
+
+  function renderBatchItemResult(key, name, data, file, rawText){
+    var el = findBatchItem(key);
+    if(!el) return;
+    var number = (data && data.number) || '';
+    var date = (data && data.date) || '';
+    var client = (data && data.client) || '';
+    var vente = (data && Number(data.fourniture)) || 0;
+    var prestation = (data && Number(data.prestation)) || 0;
+    el.innerHTML =
+      '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status ok">Lu</span></div>' +
+      '<div class="batch-item-fields">' +
+        '<input class="bi-number" placeholder="Numéro" value="' + escapeHtml(number) + '">' +
+        '<input class="bi-date" type="date" value="' + escapeHtml(date) + '">' +
+        '<input class="bi-client" placeholder="Client (optionnel)" value="' + escapeHtml(client) + '" style="grid-column:1/-1;">' +
+        '<label class="bi-amount-label">📦 Fourniture € <span class="field-hint">pièces, produits</span><input class="bi-vente" type="number" min="0" step="0.01" placeholder="0,00" value="' + (vente || '') + '"></label>' +
+        '<label class="bi-amount-label">🔧 Prestation € <span class="field-hint">main d\'œuvre</span><input class="bi-presta" type="number" min="0" step="0.01" placeholder="0,00" value="' + (prestation || '') + '"></label>' +
+      '</div>' +
+      (rawText ? '<details class="batch-item-rawtext"><summary>Voir le texte détecté</summary><pre>' + escapeHtml(rawText) + '</pre></details>' : '') +
+      '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-ignore" style="margin-top:0;">Ignorer</button><button type="button" class="btn-primary small batch-item-confirm">Déposer cette facture</button></div>';
+    attachBatchItemActions(el, key, file);
+    updateBulkActions();
+  }
+  function renderBatchItemError(key, name, file, err){
+    var el = findBatchItem(key);
+    if(!el) return;
+    el.innerHTML =
+      '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status error">Échec</span></div>' +
+      '<div class="batch-item-error">' + escapeHtml(batchErrorText(err)) + '</div>' +
+      '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-retry" style="margin-top:0;">Réessayer</button></div>';
+    attachBatchItemActions(el, key, file);
+  }
+
+  function runBatch(files){
+    if(files.length === 0) return Promise.resolve();
+    batchAbort = new AbortController();
+    document.getElementById('batch-stop').style.display = '';
+    document.getElementById('batch-start').disabled = true;
+
+    var i = 0;
+    function next(){
+      if(batchAbort.signal.aborted || i >= files.length){
+        document.getElementById('batch-stop').style.display = 'none';
+        document.getElementById('batch-start').disabled = false;
+        batchAbort = null;
+        return Promise.resolve();
+      }
+      var file = files[i++];
+      var key = 'b' + Date.now() + Math.random().toString(36).slice(2, 7);
+      addBatchItemPlaceholder(key, file.name);
+      return extractTextFromFile(file).then(function(result){
+        if(batchAbort.signal.aborted) return;
+        // A plain string is OCR output (no coordinates); an object is a PDF text layer,
+        // which carries per-word X positions and can use the column-aware parser.
+        var isStructured = result && typeof result === 'object';
+        var data = isStructured ? parseInvoiceStructured(result) : parseInvoiceText(result);
+        var rawText = isStructured ? result.text : result;
+        renderBatchItemResult(key, file.name, data, file, rawText);
+      }).catch(function(err){
+        renderBatchItemError(key, file.name, file, err);
+        if(isEngineError(err)){
+          var note = document.getElementById('batch-note');
+          note.hidden = false;
+          note.textContent = "La lecture des photos/scans n'est pas fiable ici (restriction de sécurité du navigateur, sur tous les appareils) — déposez plutôt le PDF exporté par votre logiciel de facturation.";
+          if(batchAbort) batchAbort.abort();
+        }
+      }).then(next);
+    }
+    return next();
+  }
+
+  var batchDropzone = document.getElementById('batch-dropzone');
+  var batchFileInput = document.getElementById('batch-file-input');
+  batchFileInput.addEventListener('change', function(e){ setPendingFiles(e.target.files); });
+  // Explicit click delegation (not a native <label for>) so tapping the dropzone reliably opens
+  // the file/camera picker across mobile browsers.
+  batchDropzone.addEventListener('click', function(e){
+    if(e.target === batchFileInput) return;
+    batchFileInput.click();
+  });
+  batchDropzone.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); batchFileInput.click(); }
+  });
+  batchDropzone.addEventListener('dragover', function(e){ e.preventDefault(); batchDropzone.classList.add('dragover'); });
+  batchDropzone.addEventListener('dragleave', function(){ batchDropzone.classList.remove('dragover'); });
+  batchDropzone.addEventListener('drop', function(e){
+    e.preventDefault();
+    batchDropzone.classList.remove('dragover');
+    if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) setPendingFiles(e.dataTransfer.files);
+  });
+  document.getElementById('batch-start').addEventListener('click', function(){
+    if(pendingFiles.length === 0) return;
+    document.getElementById('batch-note').hidden = true;
+    var files = pendingFiles.slice();
+    pendingFiles = [];
+    document.getElementById('batch-actions').hidden = true;
+    batchFileInput.value = '';
+    runBatch(files);
+  });
+  document.getElementById('batch-stop').addEventListener('click', function(){
+    if(batchAbort) batchAbort.abort();
+  });
+
+  // ---------------- other events ----------------
+  document.getElementById('year-prev').addEventListener('click', function(){ state.year--; renderGauges(); });
+  document.getElementById('year-next').addEventListener('click', function(){ state.year++; renderGauges(); });
+
+  document.querySelectorAll('#period-mode button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.periodMode = btn.getAttribute('data-mode');
+      document.querySelectorAll('#period-mode button').forEach(function(b){ b.classList.toggle('active', b === btn); });
+      renderUrssaf();
+    });
+  });
+  document.getElementById('period-prev').addEventListener('click', function(){ shiftPeriod(-1); });
+  document.getElementById('period-next').addEventListener('click', function(){ shiftPeriod(1); });
+
+  document.getElementById('toggle-thresholds').addEventListener('click', function(){
+    var box = document.getElementById('thresholds-editor');
+    var hidden = box.hasAttribute('hidden');
+    if(hidden){ fillThresholdInputs(); box.removeAttribute('hidden'); }
+    else { box.setAttribute('hidden',''); }
+  });
+  document.getElementById('save-thresholds').addEventListener('click', function(){
+    function num(id, fallback){
+      var v = parseFloat(document.getElementById(id).value);
+      return (isFinite(v) && v > 0) ? v : fallback;
+    }
+    var t = Object.assign({}, state.thresholds, {
+      venteSeuilBase: num('t-vente-base', DEFAULT_THRESHOLDS.venteSeuilBase),
+      venteSeuilMajore: num('t-vente-majore', DEFAULT_THRESHOLDS.venteSeuilMajore),
+      prestationSeuilBase: num('t-presta-base', DEFAULT_THRESHOLDS.prestationSeuilBase),
+      prestationSeuilMajore: num('t-presta-majore', DEFAULT_THRESHOLDS.prestationSeuilMajore)
+    });
+    state.thresholds = t;
+    saveThresholds(t);
+    document.getElementById('thresholds-editor').setAttribute('hidden','');
+  });
+
+  document.getElementById('toggle-cotis-rates').addEventListener('click', function(){
+    var box = document.getElementById('cotis-rates-editor');
+    var hidden = box.hasAttribute('hidden');
+    if(hidden){ fillThresholdInputs(); box.removeAttribute('hidden'); }
+    else { box.setAttribute('hidden',''); }
+  });
+  document.getElementById('save-cotis-rates').addEventListener('click', function(){
+    function rate(id, fallback){
+      var v = parseFloat(document.getElementById(id).value);
+      return (isFinite(v) && v >= 0) ? v : fallback;
+    }
+    var t = Object.assign({}, state.thresholds, {
+      venteTauxCotisation: rate('tx-vente', DEFAULT_THRESHOLDS.venteTauxCotisation),
+      prestationTauxCotisation: rate('tx-presta', DEFAULT_THRESHOLDS.prestationTauxCotisation),
+      cfpTaux: rate('tx-cfp', DEFAULT_THRESHOLDS.cfpTaux),
+      cmaVenteTaux: rate('tx-cma-vente', DEFAULT_THRESHOLDS.cmaVenteTaux),
+      cmaPrestaTaux: rate('tx-cma-presta', DEFAULT_THRESHOLDS.cmaPrestaTaux)
+    });
+    state.thresholds = t;
+    saveThresholds(t);
+    document.getElementById('cotis-rates-editor').setAttribute('hidden','');
+    renderUrssaf();
+  });
+
+  document.getElementById('invoices-search').addEventListener('input', function(e){
+    state.searchQuery = e.target.value;
+    renderInvoicesList();
+  });
+
+  document.getElementById('export-csv').addEventListener('click', function(){
+    var csv = '﻿' + toCsv();
+    if(downloads){
+      downloads.save({ filename: 'factures-seuil-' + isoDate(new Date()) + '.csv', data: csv }).catch(function(err){
+        if(err && err.code === 'declined') return;
+        console.error('export failed', err);
+      });
+    } else {
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'factures-seuil-' + isoDate(new Date()) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  });
+
+  // ---------------- boot ----------------
+  renderAll(); // render an empty/local state immediately, then upgrade if db resolves
+
+  if(window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('db').then(function(resolved){
+      if(resolved){ db = resolved; initDbBackend(); fillThresholdInputs(); }
+      else { initLocalBackend(); }
+    }).catch(function(){ initLocalBackend(); });
+    window.claude.use('downloads').then(function(resolved){ downloads = resolved; }).catch(function(){ downloads = null; });
+  } else {
+    initLocalBackend();
+  }
+})();
+</script>
+</body>
+</html>
