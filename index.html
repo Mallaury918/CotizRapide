@@ -183,7 +183,7 @@
     padding:7px 13px; cursor:pointer;
   }
   .segmented button.active{ background:var(--accent-soft); color:var(--accent-ink); }
-  .urssaf-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .urssaf-stats{ display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px; }
   @media (max-width:520px){ .urssaf-stats{ grid-template-columns:1fr; } }
   .stat-tile{ background:var(--card-soft); border:1px solid var(--line); border-radius:11px; padding:14px 15px; }
   .stat-tile .stat-num{ font-size:21px; font-weight:700; }
@@ -867,11 +867,14 @@
     var range = periodRange(), start = range[0], end = range[1];
     var inPeriod = invoicesList().filter(function(i){ return i.date >= start && i.date <= end; });
     var totVente = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'vente'); }, 0);
-    var totPresta = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'prestation'); }, 0);
+    var totPresta = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'prestation'); }, 0); // includes qualirepar
+    var totQualirepar = inPeriod.reduce(function(s,i){ return s + (Number(i.qualireparAmount) || 0); }, 0);
     document.getElementById('period-label').textContent = periodLabel();
     document.getElementById('urssaf-stats').innerHTML =
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente) + '</div><div class="stat-label">Ventes de marchandises</div></div>' +
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totPresta) + '</div><div class="stat-label">Prestations de services</div></div>' +
+      (state.thresholds.showQualirepar ?
+        '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totQualirepar) + '</div><div class="stat-label">dont QualiRépar</div></div>' : '') +
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente + totPresta) + '</div><div class="stat-label">Total période (' + inPeriod.length + ' facture' + (inPeriod.length > 1 ? 's' : '') + ')</div></div>';
 
     var t = state.thresholds;
