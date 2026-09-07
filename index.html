@@ -233,6 +233,7 @@
   }
   .batch-item-fields .bi-date, .batch-item-fields .bi-vente, .batch-item-fields .bi-presta{ font-family:'IBM Plex Mono', monospace; }
   .bi-amount-label{ display:flex; flex-direction:column; gap:3px; font-size:11px; font-weight:600; color:var(--ink-soft); }
+  .bi-amount-label[hidden]{ display:none; }
   .batch-item-fields .bi-vente{ border-left:3px solid var(--accent); }
   .batch-item-fields .bi-presta{ border-left:3px solid var(--warn); }
   .batch-item-error{ font-size:12px; color:var(--danger); margin-bottom:8px; }
@@ -246,6 +247,11 @@
   }
   .batch-note{ font-size:12px; color:var(--ink-soft); margin-top:4px; padding:10px 12px; background:var(--card-soft); border-radius:8px; }
   .batch-consent-note{ font-size:11.5px; color:var(--ink-faint); margin:-6px 0 12px; }
+  .qualirepar-toggle{
+    display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); font-weight:600;
+    margin:0 0 12px; cursor:pointer;
+  }
+  .qualirepar-toggle input{ margin:0; }
 
   .field-hint{ font-size:11px; font-weight:400; color:var(--ink-faint); }
 
@@ -279,6 +285,7 @@
   .inv-tag{ display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; white-space:nowrap; }
   .inv-tag.vente{ background:var(--accent-soft); color:var(--accent-ink); }
   .inv-tag.prestation{ background:var(--warn-soft); color:var(--warn); }
+  .inv-tag.qualirepar{ background:var(--ok-soft); color:var(--ok); }
   .inv-del{
     border:none; background:none; color:var(--ink-faint); font-size:12px; font-weight:600; cursor:pointer;
     padding:4px 8px; border-radius:6px; flex:0 0 auto;
@@ -351,6 +358,10 @@
           <span class="dropzone-sub">PDF recommandé — JPEG, PNG, WebP, GIF acceptés mais non fiables</span>
         </div>
         <p class="batch-consent-note">Traitement 100 % local dans votre navigateur : rien n'est envoyé à un serveur.</p>
+        <label class="qualirepar-toggle">
+          <input type="checkbox" id="toggle-qualirepar">
+          Afficher une colonne QualiRépar (bonus réparation) — pour les entreprises labellisées
+        </label>
 
         <div class="batch-actions" id="batch-actions" hidden>
           <span id="batch-file-count"></span>
@@ -459,7 +470,11 @@
     // rapide — CFP (formation professionnelle, sur le CA total) et taxes CMA (chambre de métiers
     // et de l'artisanat, propres aux artisans, distinctes pour la vente et la prestation).
     // Mettre à 0 si non applicable (ex : commerçant relevant de la CCI plutôt que de la CMA).
-    cfpTaux: 0.30, cmaVenteTaux: 0.22, cmaPrestaTaux: 0.48
+    cfpTaux: 0.30, cmaVenteTaux: 0.22, cmaPrestaTaux: 0.48,
+    // Purely a display preference — not everyone holds the QualiRépar label, so the extra
+    // field/column is opt-in. The bonus is still detected and counted either way (see
+    // invoiceTotalByType); this only shows or hides it as its own line.
+    showQualirepar: false
   };
   var LOCAL_KEY = 'seuil-calculateur-store-v3';
 
@@ -529,7 +544,7 @@
       snap.docs.forEach(function(d){
         var data = d.data();
         if(!data) return;
-        next[d.id] = { number: data.number, date: data.date, client: data.client, venteAmount: data.venteAmount, prestationAmount: data.prestationAmount };
+        next[d.id] = { number: data.number, date: data.date, client: data.client, venteAmount: data.venteAmount, prestationAmount: data.prestationAmount, qualireparAmount: data.qualireparAmount };
       });
       state.invoices = next;
       renderAll();
@@ -567,11 +582,13 @@
 
   function supaRowToInvoice(row){
     return { number: row.number, date: row.date, client: row.client,
-      venteAmount: Number(row.vente_amount) || 0, prestationAmount: Number(row.prestation_amount) || 0 };
+      venteAmount: Number(row.vente_amount) || 0, prestationAmount: Number(row.prestation_amount) || 0,
+      qualireparAmount: Number(row.quali_repar_amount) || 0 };
   }
   function invoiceToSupaRow(invoice){
     return { number: invoice.number || null, date: invoice.date, client: invoice.client || null,
-      vente_amount: invoice.venteAmount || 0, prestation_amount: invoice.prestationAmount || 0 };
+      vente_amount: invoice.venteAmount || 0, prestation_amount: invoice.prestationAmount || 0,
+      quali_repar_amount: invoice.qualireparAmount || 0 };
   }
 
   // Hoisted to module scope (not just local to initSupabaseBackend) so addInvoice/deleteInvoice/
@@ -760,10 +777,16 @@
   }
 
   function invoicesList(){ return Object.keys(state.invoices).map(function(id){ return Object.assign({ id: id }, state.invoices[id]); }); }
+  // QualiRépar's reimbursement is income tied to the repair service, not the parts — it's added
+  // into "prestation" for every total/threshold/cotisation computation, while still being kept in
+  // its own stored field so it can be shown (or hidden) as a distinct line in the interface.
   function invoiceTotalByType(inv, type){
-    return type === 'vente' ? (Number(inv.venteAmount) || 0) : (Number(inv.prestationAmount) || 0);
+    if(type === 'vente') return Number(inv.venteAmount) || 0;
+    return (Number(inv.prestationAmount) || 0) + (Number(inv.qualireparAmount) || 0);
   }
-  function invoiceTotal(inv){ return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0); }
+  function invoiceTotal(inv){
+    return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0) + (Number(inv.qualireparAmount)||0);
+  }
 
   // ---------------- gauges ----------------
   function annualTotal(year, category){
@@ -814,6 +837,7 @@
     document.getElementById('tx-cfp').value = state.thresholds.cfpTaux;
     document.getElementById('tx-cma-vente').value = state.thresholds.cmaVenteTaux;
     document.getElementById('tx-cma-presta').value = state.thresholds.cmaPrestaTaux;
+    document.getElementById('toggle-qualirepar').checked = !!state.thresholds.showQualirepar;
   }
 
   // ---------------- URSSAF period summary ----------------
@@ -879,10 +903,12 @@
     }
     el.innerHTML = list.map(function(i){
       var totVente = invoiceTotalByType(i, 'vente');
-      var totPresta = invoiceTotalByType(i, 'prestation');
+      var totPresta = invoiceTotalByType(i, 'prestation'); // already includes qualireparAmount
+      var qualirepar = Number(i.qualireparAmount) || 0;
       var tags = '';
       if(totVente > 0) tags += '<span class="inv-tag vente">Vente ' + fmtEuro(totVente) + '</span>';
       if(totPresta > 0) tags += '<span class="inv-tag prestation">Prestation ' + fmtEuro(totPresta) + '</span>';
+      if(state.thresholds.showQualirepar && qualirepar > 0) tags += '<span class="inv-tag qualirepar">dont QualiRépar ' + fmtEuro(qualirepar) + '</span>';
       return '<div class="invoice-row" data-id="' + i.id + '">' +
         '<div class="invoice-row-top">' +
           '<span class="inv-id"><span class="inv-number">' + escapeHtml(i.number || 'Sans référence') + '</span><span class="inv-date">' + fmtDateShort(i.date) + '</span></span>' +
@@ -1083,7 +1109,16 @@
   // this business's activity.
   var VENTE_KEYWORDS = ['piece','pieces','piece detachee','pieces detachees','fourniture','fournitures','marchandise','marchandises','produit','produits','article','articles','vente','materiel','materiaux','accessoire','accessoires','consommable','consommables','composant','composants','kit','equipement','equipements','matiere premiere','quincaillerie','ecran','ecrans','vitre','vitres','batterie','batteries','coque','coques','connecteur','connecteurs','chargeur','chargeurs','cable','cables','haut-parleur','haut-parleurs','camera','cameras','carte mere','bouton','boutons','nappe','nappes','capot','capots','boitier','boitiers','protection ecran','film de protection'];
   var PRESTATION_KEYWORDS = ["main d'oeuvre",'main doeuvre','prestation','prestations','prestation de service','realisation','execution','travaux','travail','intervention','interventions','depannage','assistance','assistance technique','installation','pose','montage','demontage','reparation','reparations','remise en etat','forfait','forfaitaire','diagnostic','expertise','etude','honoraires','conseil','consultation','accompagnement','audit','formation','heure','heures','taux horaire','temps passe','vacation','deplacement','frais de deplacement','service','services','developpement','maintenance','support technique','parametrage','configuration'];
-  var SKIP_LINE_KEYWORDS = ['total','sous-total','sous total','tva','acompte','remise','net a payer','a payer','solde','avoir','arrhes','rabais','ristourne','escompte','net ttc','net ht','a regler','recapitulatif'];
+  var SKIP_LINE_KEYWORDS = ['total','sous-total','sous total','tva','acompte','remise','net a payer','a payer','solde','avoir','arrhes','rabais','ristourne','escompte','net ttc','net ht','a regler','recapitulatif','montant paye','montant du'];
+  // A French phone number (dot/space-separated pairs, e.g. "06.26.96.70.19") looks exactly like a
+  // sequence of small currency amounts to the amount regexes below ("26.96.70.19" reads as several
+  // "XX,XX€"-shaped numbers) — skip any line containing one before amounts are even extracted.
+  var PHONE_NUMBER_RE = /(?:\+33[\s.-]?)?0?\d(?:[\s.-]?\d{2}){4}\b/;
+  // The QualiRépar bonus (French repair-fund eco-subsidy) shows as its own negative line on the
+  // invoice — a discount off what the customer pays, refunded to the repairer separately. Tracked
+  // in its own field rather than folded silently into "prestation" so it can be shown or hidden
+  // as its own column depending on whether a given business holds the label.
+  var QUALIREPAR_KEYWORDS = ['quali repar','qualirepar','quali-repar','bonus reparation','bonus ecologique','eco bonus','ecobonus','fonds reparation','prime reparation'];
 
   function lineHasAnyKeyword(line, keywords){
     var norm = stripAccents(line.toLowerCase()).replace(/[\s-]+/g, '');
@@ -1092,34 +1127,46 @@
   function extractAmounts(line){
     var amounts = [];
     var m;
-    // Preferred: a number with an explicit currency marker right next to it.
-    var reCurrency = /(\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.](\d{2}))?\s*(?:€|eur\b|euros?\b)/gi;
+    // Preferred: a number with an explicit currency marker right next to it. A leading "-" is
+    // kept (not just stripped) — a discount/bonus line (e.g. a QualiRépar deduction) is
+    // genuinely negative on the invoice, and losing that sign would misclassify it as a charge.
+    var reCurrency = /(-)?\s*(\d{1,3}(?:[ .]\d{3})*|\d+)(?:[,.](\d{2}))?\s*(?:€|eur\b|euros?\b)/gi;
     while((m = reCurrency.exec(line))){
-      var val = parseFloat(m[1].replace(/[ .]/g, '') + '.' + (m[2] || '00'));
+      var val = parseFloat(m[2].replace(/[ .]/g, '') + '.' + (m[3] || '00'));
+      if(m[1]) val = -val;
       if(isFinite(val)) amounts.push(val);
     }
     if(amounts.length > 0) return amounts;
     // Fallback: a bare amount with exactly two decimals (typical currency formatting) and
     // no adjacent € — common when a table lists amounts under a "Montant (€)" column header
     // instead of repeating the symbol on every row.
-    var reBare = /\b(\d{1,3}(?:[ .]\d{3})*|\d+)[,.](\d{2})\b/g;
+    var reBare = /(-)?\s*\b(\d{1,3}(?:[ .]\d{3})*|\d+)[,.](\d{2})\b/g;
     while((m = reBare.exec(line))){
-      var val2 = parseFloat(m[1].replace(/[ .]/g, '') + '.' + m[2]);
+      var val2 = parseFloat(m[2].replace(/[ .]/g, '') + '.' + m[3]);
+      if(m[1]) val2 = -val2;
       if(isFinite(val2)) amounts.push(val2);
     }
     return amounts;
   }
   function parseInvoiceText(text){
     var lines = (text || '').split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
-    var vente = 0, prestation = 0;
+    var vente = 0, prestation = 0, qualirepar = 0;
     lines.forEach(function(line){
       if(lineHasAnyKeyword(line, SKIP_LINE_KEYWORDS)) return;
+      if(PHONE_NUMBER_RE.test(line)) return;
       var amounts = extractAmounts(line);
       if(amounts.length === 0) return;
       // A line often shows both a unit price and a line total (e.g. "1  45,00€  45,00€");
       // take the last amount (conventionally the line total in a left-to-right table)
       // rather than summing every number found, which would double-count it.
       var lineValue = amounts[amounts.length - 1];
+      if(lineHasAnyKeyword(line, QUALIREPAR_KEYWORDS)){
+        // Shown on the invoice as a negative deduction off what the customer pays, but tracked
+        // here as the positive amount the repairer will be reimbursed for — that's the actual
+        // income to record.
+        qualirepar += Math.abs(lineValue);
+        return;
+      }
       // Product names are far too varied to ever list exhaustively (any écran, batterie, coque,
       // référence...), whereas labor/service wording is a comparatively bounded vocabulary. So a
       // priced, non-skipped line that isn't recognized as labor is treated as goods by default —
@@ -1129,11 +1176,17 @@
     });
 
     var date = null;
-    var dm = (text || '').match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
-    if(dm){
+    // Try every date-shaped match in order, not just the first — an invoice number that happens
+    // to look date-like (e.g. "56/09/2026", day=56) must not block finding the real date further on.
+    var dateRe = /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g;
+    var dm;
+    while((dm = dateRe.exec(text || ''))){
       var d = +dm[1], mo = +dm[2], y = +dm[3];
       if(y < 100) y += 2000;
-      if(d >= 1 && d <= 31 && mo >= 1 && mo <= 12) date = y + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      if(d >= 1 && d <= 31 && mo >= 1 && mo <= 12){
+        date = y + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+        break;
+      }
     }
 
     var number = null;
@@ -1146,10 +1199,15 @@
 
     var client = extractClientName(text);
 
-    return { number: number, date: date, client: client, fourniture: Math.round(vente * 100) / 100, prestation: Math.round(prestation * 100) / 100 };
+    return { number: number, date: date, client: client, fourniture: Math.round(vente * 100) / 100,
+      prestation: Math.round(prestation * 100) / 100, qualirepar: Math.round(qualirepar * 100) / 100 };
   }
 
-  var CLIENT_LABEL_RE = /(?:client|factur[ée]\s*[àa]|adress[ée]\s*[àa]|destinataire)\s*[:\-]\s*(.+)/i;
+  var CLIENT_LABEL_RE = /(?:client|acheteur|factur[ée]\s*[àa]|adress[ée]\s*[àa]|destinataire)\s*[:\-]\s*(.+)/i;
+  // Some templates put "Acheteur :" (or "Client :"...) alone on its own line, with the name on
+  // the next — this recognizes that label-only line so the name right after it outranks every
+  // other guess (in particular the seller's own name, found first under "Vendeur :" above it).
+  var BUYER_LABEL_ONLY_RE = /^(?:client|acheteur|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa])\s*:?\s*$/i;
   var CLIENT_SKIP_WORDS = ['siren','siret','tva','iban','bic','telephone','tel','email','mail','devis','facture',
     'page','total','sous-total','sous total','date','validite','description','quantite','unite','prix','montant',
     'france','rue','avenue','boulevard','route','chemin','allee','impasse','sarl','sas','eurl','sasu',
@@ -1197,13 +1255,21 @@
     for(var j = 0; j < lines.length; j++){
       if(/@|t[ée]l[ée]phone|siren|siret/i.test(lines[j])) afterContactIdx = j;
     }
-    var firstCandidateIdx = -1, firstAfterContactIdx = -1;
+    var afterBuyerLabelIdx = -1;
+    for(var b = 0; b < lines.length; b++){
+      if(BUYER_LABEL_ONLY_RE.test(lines[b])){ afterBuyerLabelIdx = b; break; }
+    }
+    var firstCandidateIdx = -1, firstAfterContactIdx = -1, firstAfterBuyerLabelIdx = -1;
     for(var k = 1; k < lines.length; k++){ // skip line 0: almost always the seller's own name
       if(!isPersonNameLine(lines[k])) continue;
       if(firstCandidateIdx < 0) firstCandidateIdx = k;
       if(firstAfterContactIdx < 0 && k > afterContactIdx) firstAfterContactIdx = k;
+      if(afterBuyerLabelIdx >= 0 && firstAfterBuyerLabelIdx < 0 && k > afterBuyerLabelIdx) firstAfterBuyerLabelIdx = k;
     }
-    var chosen = firstAfterContactIdx >= 0 ? firstAfterContactIdx : firstCandidateIdx;
+    // An explicit "Acheteur :" (or similar) marker is the strongest signal available — it beats
+    // both the generic "after the seller's contact block" guess and the plain first-match fallback.
+    var chosen = firstAfterBuyerLabelIdx >= 0 ? firstAfterBuyerLabelIdx :
+      (firstAfterContactIdx >= 0 ? firstAfterContactIdx : firstCandidateIdx);
     return chosen >= 0 ? cleanClientCandidate(lines[chosen]) : null;
   }
 
@@ -1259,7 +1325,8 @@
         if(dVente <= dPresta) vente += val; else prestation += val;
       });
     });
-    return { number: meta.number, date: meta.date, client: meta.client, fourniture: Math.round(vente * 100) / 100, prestation: Math.round(prestation * 100) / 100 };
+    return { number: meta.number, date: meta.date, client: meta.client, fourniture: Math.round(vente * 100) / 100,
+      prestation: Math.round(prestation * 100) / 100, qualirepar: meta.qualirepar };
   }
 
   function batchErrorText(err){
@@ -1299,12 +1366,14 @@
       var client = el.querySelector('.bi-client').value.trim();
       var vente = parseFloat(el.querySelector('.bi-vente').value) || 0;
       var prestation = parseFloat(el.querySelector('.bi-presta').value) || 0;
-      if(!date || (vente <= 0 && prestation <= 0)){
+      var qualireparEl = el.querySelector('.bi-qualirepar');
+      var qualirepar = qualireparEl ? (parseFloat(qualireparEl.value) || 0) : 0;
+      if(!date || (vente <= 0 && prestation <= 0 && qualirepar <= 0)){
         el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
         return;
       }
       confirmBtn.disabled = true;
-      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation })).then(function(){
+      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar })).then(function(){
         el.remove();
         updateBulkActions();
       }).catch(function(){ confirmBtn.disabled = false; });
@@ -1353,7 +1422,9 @@
       var date = el.querySelector('.bi-date').value;
       var vente = parseFloat(el.querySelector('.bi-vente').value) || 0;
       var prestation = parseFloat(el.querySelector('.bi-presta').value) || 0;
-      if(!date || (vente <= 0 && prestation <= 0)){
+      var qualireparEl = el.querySelector('.bi-qualirepar');
+      var qualirepar = qualireparEl ? (parseFloat(qualireparEl.value) || 0) : 0;
+      if(!date || (vente <= 0 && prestation <= 0 && qualirepar <= 0)){
         skipped++;
         el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
         next(i + 1);
@@ -1361,7 +1432,7 @@
       }
       var number = el.querySelector('.bi-number').value.trim();
       var client = el.querySelector('.bi-client').value.trim();
-      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation }))
+      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar }))
         .then(function(){ el.remove(); })
         .catch(function(){ skipped++; })
         .then(function(){ next(i + 1); });
@@ -1377,6 +1448,7 @@
     var client = (data && data.client) || '';
     var vente = (data && Number(data.fourniture)) || 0;
     var prestation = (data && Number(data.prestation)) || 0;
+    var qualirepar = (data && Number(data.qualirepar)) || 0;
     el.innerHTML =
       '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status ok">Lu</span></div>' +
       '<div class="batch-item-fields">' +
@@ -1385,6 +1457,7 @@
         '<input class="bi-client" placeholder="Client (optionnel)" value="' + escapeHtml(client) + '" style="grid-column:1/-1;">' +
         '<label class="bi-amount-label">📦 Fourniture € <span class="field-hint">pièces, produits</span><input class="bi-vente" type="number" min="0" step="0.01" placeholder="0,00" value="' + (vente || '') + '"></label>' +
         '<label class="bi-amount-label">🔧 Prestation € <span class="field-hint">main d\'œuvre</span><input class="bi-presta" type="number" min="0" step="0.01" placeholder="0,00" value="' + (prestation || '') + '"></label>' +
+        '<label class="bi-amount-label"' + (state.thresholds.showQualirepar ? '' : ' hidden') + ' style="grid-column:1/-1;">🌱 QualiRépar € <span class="field-hint">bonus réparation</span><input class="bi-qualirepar" type="number" min="0" step="0.01" placeholder="0,00" value="' + (qualirepar || '') + '"></label>' +
       '</div>' +
       (rawText ? '<details class="batch-item-rawtext"><summary>Voir le texte détecté</summary><pre>' + escapeHtml(rawText) + '</pre></details>' : '') +
       '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-ignore" style="margin-top:0;">Ignorer</button><button type="button" class="btn-primary small batch-item-confirm">Déposer cette facture</button></div>';
@@ -1529,6 +1602,13 @@
     saveThresholds(t);
     document.getElementById('cotis-rates-editor').setAttribute('hidden','');
     renderUrssaf();
+  });
+
+  document.getElementById('toggle-qualirepar').addEventListener('change', function(e){
+    var t = Object.assign({}, state.thresholds, { showQualirepar: e.target.checked });
+    state.thresholds = t;
+    saveThresholds(t);
+    renderInvoicesList();
   });
 
   document.getElementById('invoices-search').addEventListener('input', function(e){
