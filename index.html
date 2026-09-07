@@ -263,6 +263,12 @@
   }
   .btn-primary:hover{ background:var(--accent-ink); }
   .btn-primary:disabled{ opacity:0.55; cursor:not-allowed; }
+  .btn-primary.warn{ background:var(--warn); }
+  .btn-primary.warn:hover{ background:var(--warn); opacity:0.85; }
+  .batch-item-dup-warning{
+    font-size:12px; color:var(--warn); background:var(--warn-soft); border-radius:8px;
+    padding:8px 10px; margin-bottom:10px; font-weight:600;
+  }
 
   /* ---- invoices list ---- */
   .invoices-card{ flex:1; display:flex; flex-direction:column; min-height:0; }
@@ -274,6 +280,16 @@
   .invoices-list{ display:flex; flex-direction:column; gap:1px; max-height:560px; overflow-y:auto; overflow-x:hidden; border-radius:10px; }
   .invoices-empty{ padding:26px 10px; text-align:center; color:var(--ink-faint); font-size:13px; }
   .invoices-empty strong{ display:block; color:var(--ink-soft); font-size:14px; margin-bottom:4px; font-weight:600; }
+  .invoice-month-group{ border-bottom:1px solid var(--line); }
+  .invoice-month-group:last-child{ border-bottom:none; }
+  .invoice-month-header{
+    width:100%; display:flex; align-items:center; gap:8px; padding:11px 4px; border:none; background:none;
+    cursor:pointer; text-align:left; font-family:'Public Sans', sans-serif; color:var(--ink);
+  }
+  .invoice-month-chevron{ color:var(--ink-faint); font-size:11px; flex:none; width:10px; }
+  .invoice-month-label{ font-weight:700; font-size:13.5px; }
+  .invoice-month-meta{ margin-left:auto; font-size:12px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
+  .invoice-month-rows[hidden]{ display:none; }
   .invoice-row{ padding:12px 4px; border-bottom:1px solid var(--line); background:var(--card); }
   .invoice-row:last-child{ border-bottom:none; }
   .invoice-row-top{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:6px; }
@@ -793,6 +809,25 @@
     return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0) + (Number(inv.qualireparAmount)||0);
   }
 
+  // Prefer the invoice number when there is one (the most reliable signal a business actually
+  // guarantees is unique) — only fall back to a same-date-and-amounts match for invoices with no
+  // number at all, since two genuinely different invoices could otherwise share a date/total.
+  function invoiceSignature(inv){
+    var num = String((inv && inv.number) || '').trim().toLowerCase();
+    if(num) return 'n:' + num;
+    return 'd:' + ((inv && inv.date) || '') + '|' + (Number(inv && inv.venteAmount) || 0).toFixed(2) +
+      '|' + (Number(inv && inv.prestationAmount) || 0).toFixed(2) + '|' + (Number(inv && inv.qualireparAmount) || 0).toFixed(2);
+  }
+  function findDuplicateInvoice(candidate){
+    var sig = invoiceSignature(candidate);
+    var match = null;
+    invoicesList().some(function(inv){
+      if(invoiceSignature(inv) === sig){ match = inv; return true; }
+      return false;
+    });
+    return match;
+  }
+
   // ---------------- gauges ----------------
   function annualTotal(year, category){
     var start = year + '-01-01', end = year + '-12-31';
@@ -912,6 +947,31 @@
   }
 
   // ---------------- invoices list ----------------
+  // Session-only UI state (not persisted): which "YYYY-MM" month groups are expanded in the
+  // invoices list. Re-rendering (on every deposit/delete/sync) must not reset a group the user
+  // has already opened or closed, so this lives outside renderInvoicesList itself.
+  var expandedMonths = {};
+
+  function invoiceRowHtml(i){
+    var totVente = invoiceTotalByType(i, 'vente');
+    var totPresta = invoiceTotalByType(i, 'prestation'); // already includes qualireparAmount
+    var qualirepar = Number(i.qualireparAmount) || 0;
+    var tags = '';
+    if(totVente > 0) tags += '<span class="inv-tag vente">Vente ' + fmtEuro(totVente) + '</span>';
+    if(totPresta > 0) tags += '<span class="inv-tag prestation">Prestation ' + fmtEuro(totPresta) + '</span>';
+    if(state.thresholds.showQualirepar && qualirepar > 0) tags += '<span class="inv-tag qualirepar">dont QualiRépar ' + fmtEuro(qualirepar) + '</span>';
+    return '<div class="invoice-row" data-id="' + i.id + '">' +
+      '<div class="invoice-row-top">' +
+        '<span class="inv-id"><span class="inv-number">' + escapeHtml(i.number || 'Sans référence') + '</span><span class="inv-date">' + fmtDateShort(i.date) + '</span></span>' +
+        '<span class="inv-total">' + fmtEuro(invoiceTotal(i)) + '</span>' +
+      '</div>' +
+      '<div class="invoice-row-bottom">' +
+        '<span class="inv-tags">' + (i.client ? '<span class="inv-client">' + escapeHtml(i.client) + '</span>' : '') + tags + '</span>' +
+        '<button class="inv-del" data-id="' + i.id + '">Supprimer</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderInvoicesList(){
     var list = invoicesList().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.number||'').localeCompare(a.number||''); });
     var q = state.searchQuery.trim().toLowerCase();
@@ -922,25 +982,42 @@
         (q ? 'Aucune facture ne correspond à « ' + escapeHtml(state.searchQuery.trim()) + ' ».' : 'Déposez votre première facture ci-contre.') + '</div>';
       return;
     }
-    el.innerHTML = list.map(function(i){
-      var totVente = invoiceTotalByType(i, 'vente');
-      var totPresta = invoiceTotalByType(i, 'prestation'); // already includes qualireparAmount
-      var qualirepar = Number(i.qualireparAmount) || 0;
-      var tags = '';
-      if(totVente > 0) tags += '<span class="inv-tag vente">Vente ' + fmtEuro(totVente) + '</span>';
-      if(totPresta > 0) tags += '<span class="inv-tag prestation">Prestation ' + fmtEuro(totPresta) + '</span>';
-      if(state.thresholds.showQualirepar && qualirepar > 0) tags += '<span class="inv-tag qualirepar">dont QualiRépar ' + fmtEuro(qualirepar) + '</span>';
-      return '<div class="invoice-row" data-id="' + i.id + '">' +
-        '<div class="invoice-row-top">' +
-          '<span class="inv-id"><span class="inv-number">' + escapeHtml(i.number || 'Sans référence') + '</span><span class="inv-date">' + fmtDateShort(i.date) + '</span></span>' +
-          '<span class="inv-total">' + fmtEuro(invoiceTotal(i)) + '</span>' +
-        '</div>' +
-        '<div class="invoice-row-bottom">' +
-          '<span class="inv-tags">' + (i.client ? '<span class="inv-client">' + escapeHtml(i.client) + '</span>' : '') + tags + '</span>' +
-          '<button class="inv-del" data-id="' + i.id + '">Supprimer</button>' +
-        '</div>' +
+
+    // list is already sorted by date descending, so same-month invoices are always adjacent —
+    // one linear pass is enough to build the groups without a second sort.
+    var groups = [];
+    list.forEach(function(inv){
+      var key = (inv.date || '').slice(0, 7) || 'Sans date';
+      var g = groups.length && groups[groups.length - 1].key === key ? groups[groups.length - 1] : null;
+      if(!g){
+        g = { key: key, invoices: [] };
+        groups.push(g);
+      }
+      g.invoices.push(inv);
+    });
+
+    el.innerHTML = groups.map(function(g, idx){
+      if(!(g.key in expandedMonths)) expandedMonths[g.key] = idx === 0; // newest month open by default
+      var open = !!q || expandedMonths[g.key]; // a search always shows its matches, regardless of stored state
+      var label = /^\d{4}-\d{2}$/.test(g.key) ? MONTHS[+g.key.slice(5, 7) - 1] + ' ' + g.key.slice(0, 4) : g.key;
+      var groupTotal = g.invoices.reduce(function(s, i){ return s + invoiceTotal(i); }, 0);
+      return '<div class="invoice-month-group">' +
+        '<button type="button" class="invoice-month-header" data-month-key="' + escapeHtml(g.key) + '" aria-expanded="' + open + '">' +
+          '<span class="invoice-month-chevron">' + (open ? '▾' : '▸') + '</span>' +
+          '<span class="invoice-month-label">' + escapeHtml(label) + '</span>' +
+          '<span class="invoice-month-meta">' + g.invoices.length + ' facture' + (g.invoices.length > 1 ? 's' : '') + ' · ' + fmtEuro(groupTotal) + '</span>' +
+        '</button>' +
+        '<div class="invoice-month-rows"' + (open ? '' : ' hidden') + '>' + g.invoices.map(invoiceRowHtml).join('') + '</div>' +
       '</div>';
     }).join('');
+
+    el.querySelectorAll('.invoice-month-header').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var key = btn.getAttribute('data-month-key');
+        expandedMonths[key] = !expandedMonths[key];
+        renderInvoicesList();
+      });
+    });
     el.querySelectorAll('.inv-del').forEach(function(btn){
       btn.addEventListener('click', function(){ deleteInvoice(btn.getAttribute('data-id')); });
     });
@@ -1393,8 +1470,25 @@
         el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
         return;
       }
+      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar };
+      // Re-checked live (not just at render time) so a duplicate created moments ago — by another
+      // card in this same batch, or synced in from another device — is still caught. The first
+      // click only warns; a second, deliberate click on "Déposer quand même" is what proceeds.
+      var dup = findDuplicateInvoice(candidate);
+      if(dup && confirmBtn.getAttribute('data-dup-ack') !== 'true'){
+        confirmBtn.setAttribute('data-dup-ack', 'true');
+        confirmBtn.textContent = 'Déposer quand même';
+        confirmBtn.classList.add('warn');
+        if(!el.querySelector('.batch-item-dup-warning')){
+          var warn = document.createElement('div');
+          warn.className = 'batch-item-dup-warning';
+          warn.textContent = '⚠️ Déjà déposée : n° ' + (dup.number || 'sans référence') + ', ' + fmtDateShort(dup.date) + ', ' + fmtEuro(invoiceTotal(dup)) + ' — vérifiez avant de continuer.';
+          el.querySelector('.batch-item-head').insertAdjacentElement('afterend', warn);
+        }
+        return;
+      }
       confirmBtn.disabled = true;
-      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar })).then(function(){
+      Promise.resolve(addInvoice(Object.assign({ client: client }, candidate))).then(function(){
         jumpUrssafPeriodTo(date);
         el.remove();
         updateBulkActions();
@@ -1439,20 +1533,26 @@
     });
     if(items.length === 0) return;
     btn.disabled = true;
-    var skipped = 0;
+    var skippedInvalid = 0, skippedDuplicate = 0;
     var lastDepositedDate = null;
-    function next(i){
-      if(i >= items.length){
-        btn.disabled = false;
-        if(lastDepositedDate) jumpUrssafPeriodTo(lastDepositedDate);
-        updateBulkActions();
-        var note = document.getElementById('batch-note');
-        if(skipped > 0){
-          note.hidden = false;
-          note.textContent = skipped + ' facture' + (skipped > 1 ? 's' : '') + ' n’' + (skipped > 1 ? 'ont' : 'a') + ' pas ' + (skipped > 1 ? 'pu' : 'pu') + ' être déposée' + (skipped > 1 ? 's' : '') + ' automatiquement (date ou montant manquant) — vérifiez-la ci-dessus.';
-        }
-        return;
+    var confirmedSignatures = {}; // catches duplicates *within this same batch*, not just against
+                                   // already-deposited invoices — two identical PDFs dropped together
+                                   // wouldn't otherwise be caught, since neither is "already deposited" yet.
+    function finish(){
+      btn.disabled = false;
+      if(lastDepositedDate) jumpUrssafPeriodTo(lastDepositedDate);
+      updateBulkActions();
+      var note = document.getElementById('batch-note');
+      var parts = [];
+      if(skippedInvalid > 0) parts.push(skippedInvalid + ' facture' + (skippedInvalid > 1 ? 's' : '') + ' sans date ou montant');
+      if(skippedDuplicate > 0) parts.push(skippedDuplicate + ' doublon' + (skippedDuplicate > 1 ? 's' : '') + ' détecté' + (skippedDuplicate > 1 ? 's' : ''));
+      if(parts.length > 0){
+        note.hidden = false;
+        note.textContent = parts.join(' et ') + ' — vérifiez et déposez individuellement ci-dessus si besoin.';
       }
+    }
+    function next(i){
+      if(i >= items.length){ finish(); return; }
       var el = items[i];
       var date = el.querySelector('.bi-date').value;
       var vente = parseFloat(el.querySelector('.bi-vente').value) || 0;
@@ -1460,16 +1560,23 @@
       var qualireparEl = el.querySelector('.bi-qualirepar');
       var qualirepar = qualireparEl ? (parseFloat(qualireparEl.value) || 0) : 0;
       if(!date || (vente <= 0 && prestation <= 0 && qualirepar <= 0)){
-        skipped++;
+        skippedInvalid++;
         el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
         next(i + 1);
         return;
       }
       var number = el.querySelector('.bi-number').value.trim();
       var client = el.querySelector('.bi-client').value.trim();
-      Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar }))
-        .then(function(){ el.remove(); lastDepositedDate = date; })
-        .catch(function(){ skipped++; })
+      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar };
+      var sig = invoiceSignature(candidate);
+      if(findDuplicateInvoice(candidate) || confirmedSignatures[sig]){
+        skippedDuplicate++;
+        next(i + 1);
+        return;
+      }
+      Promise.resolve(addInvoice(Object.assign({ client: client }, candidate)))
+        .then(function(){ confirmedSignatures[sig] = true; el.remove(); lastDepositedDate = date; })
+        .catch(function(){ skippedInvalid++; })
         .then(function(){ next(i + 1); });
     }
     next(0);
@@ -1484,8 +1591,11 @@
     var vente = (data && Number(data.fourniture)) || 0;
     var prestation = (data && Number(data.prestation)) || 0;
     var qualirepar = (data && Number(data.qualirepar)) || 0;
+    var dup = findDuplicateInvoice({ number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar });
     el.innerHTML =
       '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status ok">Lu</span></div>' +
+      (dup ? '<div class="batch-item-dup-warning">⚠️ Déjà déposée : n° ' + escapeHtml(dup.number || 'sans référence') +
+        ', ' + fmtDateShort(dup.date) + ', ' + fmtEuro(invoiceTotal(dup)) + ' — vérifiez avant de continuer.</div>' : '') +
       '<div class="batch-item-fields">' +
         '<input class="bi-number" placeholder="Numéro" value="' + escapeHtml(number) + '">' +
         '<input class="bi-date" type="date" value="' + escapeHtml(date) + '">' +
@@ -1495,7 +1605,8 @@
         '<label class="bi-amount-label"' + (state.thresholds.showQualirepar ? '' : ' hidden') + ' style="grid-column:1/-1;">🌱 QualiRépar € <span class="field-hint">bonus réparation</span><input class="bi-qualirepar" type="number" min="0" step="0.01" placeholder="0,00" value="' + (qualirepar || '') + '"></label>' +
       '</div>' +
       (rawText ? '<details class="batch-item-rawtext"><summary>Voir le texte détecté</summary><pre>' + escapeHtml(rawText) + '</pre></details>' : '') +
-      '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-ignore" style="margin-top:0;">Ignorer</button><button type="button" class="btn-primary small batch-item-confirm">Déposer cette facture</button></div>';
+      '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-ignore" style="margin-top:0;">Ignorer</button><button type="button" class="' +
+        (dup ? 'btn-primary small warn' : 'btn-primary small') + ' batch-item-confirm">' + (dup ? 'Déposer quand même' : 'Déposer cette facture') + '</button></div>';
     attachBatchItemActions(el, key, file);
     updateBulkActions();
   }
