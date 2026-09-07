@@ -151,6 +151,12 @@
   #year-label, #period-label{ font-size:13px; font-weight:600; color:var(--ink); min-width:9ch; text-align:center; }
 
   /* ---- gauges ---- */
+  .ca-ytd{
+    margin-bottom:16px; padding:14px 16px; background:var(--accent-soft); border-radius:11px;
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  .ca-ytd-label{ font-size:13px; font-weight:700; color:var(--accent-ink); }
+  .ca-ytd-value{ font-size:23px; font-weight:800; color:var(--accent-ink); font-family:'IBM Plex Mono', monospace; }
   .gauges{ display:flex; flex-direction:column; gap:20px; }
   .gauge-row{ display:flex; flex-direction:column; gap:8px; }
   .gauge-top{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; }
@@ -412,6 +418,7 @@
             <button id="year-next" type="button" aria-label="Année suivante">›</button>
           </div>
         </div>
+        <div class="ca-ytd" id="ca-ytd"></div>
         <div class="gauges" id="gauges"></div>
         <button class="link-btn" id="toggle-thresholds" type="button">Modifier les seuils légaux</button>
         <div class="thresholds-editor" id="thresholds-editor" hidden>
@@ -861,7 +868,10 @@
     document.getElementById('year-label').textContent = state.year;
     var t = state.thresholds;
     var totVente = annualTotal(state.year, 'vente');
-    var totPresta = annualTotal(state.year, 'prestation');
+    var totPresta = annualTotal(state.year, 'prestation'); // already includes qualireparAmount
+    document.getElementById('ca-ytd').innerHTML =
+      '<span class="ca-ytd-label">🚀 Chiffre d\'affaires ' + state.year + '</span>' +
+      '<span class="ca-ytd-value">' + fmtEuro(totVente + totPresta) + '</span>';
     document.getElementById('gauges').innerHTML =
       gaugeHtml('Vente de marchandises', totVente, t.venteSeuilBase, t.venteSeuilMajore) +
       gaugeHtml('Prestations de services', totPresta, t.prestationSeuilBase, t.prestationSeuilMajore);
