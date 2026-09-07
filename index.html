@@ -489,12 +489,89 @@
     }, function(err){ console.error('settings subscription error', err); });
   }
 
+  // ---------------- Supabase backend (standalone hosting: cross-device sync outside Claude) ----------------
+  var SUPABASE_URL = 'https://plrzagtwojvmubcectgx.supabase.co';
+  var SUPABASE_ANON_KEY = 'sb_publishable_oxDD1LtWA9hw30_7WAnKKg_RROSUNj8';
+  var supa = null;
+
+  function loadSupabaseJs(){
+    if(window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+      s.onload = function(){
+        if(done) return; done = true;
+        if(!window.supabase){ reject(new Error('supabase_missing')); return; }
+        resolve(window.supabase);
+      };
+      s.onerror = function(){ if(done) return; done = true; reject(new Error('supabase_load_failed')); };
+      document.head.appendChild(s);
+      setTimeout(function(){ if(done) return; done = true; reject(new Error('supabase_timeout')); }, 10000);
+    });
+  }
+
+  function supaRowToInvoice(row){
+    return { number: row.number, date: row.date, client: row.client,
+      venteAmount: Number(row.vente_amount) || 0, prestationAmount: Number(row.prestation_amount) || 0 };
+  }
+  function invoiceToSupaRow(invoice){
+    return { number: invoice.number || null, date: invoice.date, client: invoice.client || null,
+      vente_amount: invoice.venteAmount || 0, prestation_amount: invoice.prestationAmount || 0 };
+  }
+
+  function initSupabaseBackend(){
+    loadSupabaseJs().then(function(supabaseLib){
+      supa = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      state.backend = 'supabase';
+      setSyncState('db'); // same "Enregistré et synchronisé" indicator as the Claude-artifact db backend
+
+      function refreshInvoices(){
+        supa.from('invoices').select('*').order('date', { ascending: false }).limit(1000).then(function(res){
+          if(res.error){ console.error('supabase invoices error', res.error); return; }
+          var next = {};
+          (res.data || []).forEach(function(row){ next[row.id] = supaRowToInvoice(row); });
+          state.invoices = next;
+          renderAll();
+        });
+      }
+      function refreshThresholds(){
+        supa.from('settings').select('*').eq('key', 'thresholds').maybeSingle().then(function(res){
+          if(res.error){ console.error('supabase settings error', res.error); return; }
+          state.thresholds = Object.assign({}, DEFAULT_THRESHOLDS, (res.data && res.data.value) || {});
+          renderGauges();
+          renderUrssaf();
+          fillThresholdInputs();
+        });
+      }
+
+      refreshInvoices();
+      refreshThresholds();
+
+      // Realtime: any device's change refreshes every other open tab automatically.
+      supa.channel('public:invoices')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, refreshInvoices)
+        .subscribe();
+      supa.channel('public:settings')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, refreshThresholds)
+        .subscribe();
+    }).catch(function(err){
+      console.error('supabase init failed', err);
+      initLocalBackend();
+    });
+  }
+
   // ---------------- CRUD ----------------
   function addInvoice(invoice){
     if(state.backend === 'db'){
       return db.collection('invoices').add(invoice).catch(function(e){
         console.error('add invoice failed', e);
         throw e;
+      });
+    }
+    if(state.backend === 'supabase'){
+      return supa.from('invoices').insert(invoiceToSupaRow(invoice)).then(function(res){
+        if(res.error){ console.error('add invoice failed', res.error); throw res.error; }
       });
     }
     var id = uid();
@@ -508,6 +585,10 @@
       db.doc('invoices/' + id).delete().catch(function(e){ console.error('delete failed', e); });
       return;
     }
+    if(state.backend === 'supabase'){
+      supa.from('invoices').delete().eq('id', id).then(function(res){ if(res.error) console.error('delete failed', res.error); });
+      return;
+    }
     delete state.invoices[id];
     writeLocal();
     renderAll();
@@ -515,6 +596,10 @@
   function saveThresholds(t){
     if(state.backend === 'db'){
       db.doc('settings/thresholds').set(t).catch(function(e){ console.error('save thresholds failed', e); });
+      return;
+    }
+    if(state.backend === 'supabase'){
+      supa.from('settings').upsert({ key: 'thresholds', value: t }).then(function(res){ if(res.error) console.error('save thresholds failed', res.error); });
       return;
     }
     state.thresholds = t;
@@ -1365,7 +1450,7 @@
     }).catch(function(){ initLocalBackend(); });
     window.claude.use('downloads').then(function(resolved){ downloads = resolved; }).catch(function(){ downloads = null; });
   } else {
-    initLocalBackend();
+    initSupabaseBackend();
   }
 })();
 </script>
