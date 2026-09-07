@@ -710,7 +710,7 @@
       return;
     }
     if(state.backend === 'supabase'){
-      supa.from('settings').upsert({ key: 'thresholds', value: t }).then(function(res){
+      supa.from('settings').upsert({ key: 'thresholds', value: t }, { onConflict: 'user_id,key' }).then(function(res){
         if(res.error) console.error('save thresholds failed', res.error);
         else supaRefreshThresholds();
       });
