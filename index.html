@@ -285,7 +285,8 @@
   }
   .inv-del:hover{ background:var(--danger-soft); color:var(--danger); }
 
-  .export-row{ display:flex; justify-content:flex-end; }
+  .export-row{ display:flex; justify-content:flex-end; align-items:center; gap:18px; }
+  .link-btn.danger{ color:var(--danger); }
 
   ::selection{ background:var(--accent-soft); }
   button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
@@ -437,6 +438,7 @@
         <input type="search" id="invoices-search" placeholder="Filtrer par numéro ou client…">
         <div class="invoices-list" id="invoices-list"></div>
         <div class="export-row" style="margin-top:12px;">
+          <button class="link-btn danger" id="delete-all-invoices" type="button" style="margin-top:0;">Supprimer tout</button>
           <button class="link-btn" id="export-csv" type="button" style="margin-top:0;">Exporter en CSV</button>
         </div>
       </div>
@@ -703,6 +705,25 @@
     delete state.invoices[id];
     writeLocal();
     renderAll();
+  }
+  function deleteAllInvoices(){
+    if(state.backend === 'db'){
+      return Promise.all(Object.keys(state.invoices).map(function(id){
+        return db.doc('invoices/' + id).delete().catch(function(e){ console.error('delete failed', e); });
+      }));
+    }
+    if(state.backend === 'supabase'){
+      // RLS already scopes every row to this account; `not id is null` is just the unconditional
+      // filter PostgREST requires on a delete (it refuses a WHERE-less delete outright).
+      return supa.from('invoices').delete().not('id', 'is', null).then(function(res){
+        if(res.error) console.error('delete all failed', res.error);
+        else supaRefreshInvoices();
+      });
+    }
+    state.invoices = {};
+    writeLocal();
+    renderAll();
+    return Promise.resolve();
   }
   function saveThresholds(t){
     if(state.backend === 'db'){
@@ -1534,6 +1555,17 @@
   document.getElementById('invoices-search').addEventListener('input', function(e){
     state.searchQuery = e.target.value;
     renderInvoicesList();
+  });
+
+  document.getElementById('delete-all-invoices').addEventListener('click', function(){
+    var count = invoicesList().length;
+    if(count === 0) return;
+    var ok = window.confirm(
+      'Supprimer définitivement ' + (count > 1 ? 'les ' + count + ' factures déposées' : 'la facture déposée') +
+      ' ? Cette action est irréversible.'
+    );
+    if(!ok) return;
+    deleteAllInvoices();
   });
 
   document.getElementById('export-csv').addEventListener('click', function(){
