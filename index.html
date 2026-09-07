@@ -234,6 +234,7 @@
   .batch-item-status.reading{ background:var(--accent-soft); color:var(--accent-ink); }
   .batch-item-status.ok{ background:var(--ok-soft); color:var(--ok); }
   .batch-item-status.error{ background:var(--danger-soft); color:var(--danger); }
+  .batch-item-status.rejected{ background:var(--warn-soft); color:var(--warn); }
   .batch-item-fields{ display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:10px; }
   .batch-item-fields input{
     padding:7px 8px; border:1px solid var(--line); border-radius:7px; background:var(--card); color:var(--ink);
@@ -572,7 +573,7 @@
       snap.docs.forEach(function(d){
         var data = d.data();
         if(!data) return;
-        next[d.id] = { number: data.number, date: data.date, client: data.client, venteAmount: data.venteAmount, prestationAmount: data.prestationAmount, qualireparAmount: data.qualireparAmount };
+        next[d.id] = { number: data.number, date: data.date, client: data.client, venteAmount: data.venteAmount, prestationAmount: data.prestationAmount, qualireparAmount: data.qualireparAmount, sourceHash: data.sourceHash };
       });
       state.invoices = next;
       renderAll();
@@ -611,12 +612,12 @@
   function supaRowToInvoice(row){
     return { number: row.number, date: row.date, client: row.client,
       venteAmount: Number(row.vente_amount) || 0, prestationAmount: Number(row.prestation_amount) || 0,
-      qualireparAmount: Number(row.quali_repar_amount) || 0 };
+      qualireparAmount: Number(row.quali_repar_amount) || 0, sourceHash: row.source_hash || '' };
   }
   function invoiceToSupaRow(invoice){
     return { number: invoice.number || null, date: invoice.date, client: invoice.client || null,
       vente_amount: invoice.venteAmount || 0, prestation_amount: invoice.prestationAmount || 0,
-      quali_repar_amount: invoice.qualireparAmount || 0 };
+      quali_repar_amount: invoice.qualireparAmount || 0, source_hash: invoice.sourceHash || null };
   }
 
   // Hoisted to module scope (not just local to initSupabaseBackend) so addInvoice/deleteInvoice/
@@ -819,20 +820,45 @@
   // Prefer the invoice number when there is one (the most reliable signal a business actually
   // guarantees is unique) — only fall back to a same-date-and-amounts match for invoices with no
   // number at all, since two genuinely different invoices could otherwise share a date/total.
-  function invoiceSignature(inv){
-    var num = String((inv && inv.number) || '').trim().toLowerCase();
-    if(num) return 'n:' + num;
-    return 'd:' + ((inv && inv.date) || '') + '|' + (Number(inv && inv.venteAmount) || 0).toFixed(2) +
-      '|' + (Number(inv && inv.prestationAmount) || 0).toFixed(2) + '|' + (Number(inv && inv.qualireparAmount) || 0).toFixed(2);
+  // A number match is reliable for a real text layer, but OCR on a photo can read the very same
+  // invoice slightly differently between two passes (a misread digit, a missed number entirely) —
+  // relying on parsed fields alone would miss "literally the same file, dropped twice". The file's
+  // own content hash (computed once at read time, see hashFile) is checked first because it can't
+  // drift the way OCR output can; field-based matching is the fallback for genuinely different
+  // files that happen to represent the same invoice (a re-export, a rescan).
+  function isDuplicateOf(a, b){
+    // A hash MATCH proves it's the same file — short-circuit to true. A hash MISMATCH only proves
+    // the files aren't byte-identical; it says nothing about whether they're the same invoice (a
+    // rescanned or re-exported copy would legitimately hash differently), so it must fall through
+    // to the field-based checks below rather than concluding "not a duplicate".
+    if(a.sourceHash && b.sourceHash && a.sourceHash === b.sourceHash) return true;
+    var numA = String((a && a.number) || '').trim().toLowerCase();
+    var numB = String((b && b.number) || '').trim().toLowerCase();
+    if(numA && numB) return numA === numB;
+    if(numA || numB) return false; // one has a number and the other doesn't: not enough to say
+    return (a && a.date) === (b && b.date) &&
+      (Number(a && a.venteAmount) || 0).toFixed(2) === (Number(b && b.venteAmount) || 0).toFixed(2) &&
+      (Number(a && a.prestationAmount) || 0).toFixed(2) === (Number(b && b.prestationAmount) || 0).toFixed(2) &&
+      (Number(a && a.qualireparAmount) || 0).toFixed(2) === (Number(b && b.qualireparAmount) || 0).toFixed(2);
   }
   function findDuplicateInvoice(candidate){
-    var sig = invoiceSignature(candidate);
     var match = null;
     invoicesList().some(function(inv){
-      if(invoiceSignature(inv) === sig){ match = inv; return true; }
+      if(isDuplicateOf(candidate, inv)){ match = inv; return true; }
       return false;
     });
     return match;
+  }
+  // A file's own bytes, hashed once when it's read — the most reliable duplicate signal there is,
+  // immune to whatever OCR/PDF-parsing makes of the content. Unavailable outside a secure context
+  // (crypto.subtle requires HTTPS); callers must tolerate a null result and fall back gracefully.
+  function hashFile(file){
+    if(!window.crypto || !window.crypto.subtle) return Promise.resolve(null);
+    return file.arrayBuffer().then(function(buf){
+      return window.crypto.subtle.digest('SHA-256', buf);
+    }).then(function(digest){
+      return Array.prototype.map.call(new Uint8Array(digest), function(b){ return b.toString(16).padStart(2, '0'); }).join('');
+    }).catch(function(){ return null; });
   }
 
   // ---------------- gauges ----------------
@@ -1228,6 +1254,19 @@
   // as its own column depending on whether a given business holds the label.
   var QUALIREPAR_KEYWORDS = ['quali repar','qualirepar','quali-repar','bonus reparation','bonus ecologique','eco bonus','ecobonus','fonds reparation','prime reparation'];
 
+  // A devis (quote) isn't a concluded sale — depositing one would inflate the declared figures for
+  // nothing that was actually paid. Only an explicit, unambiguous "devis" mention with no "facture"
+  // anywhere triggers rejection: many real invoices reference the quote they originated from (e.g.
+  // "suite à notre devis n°..."), and seeing both words is a real invoice, not a quote.
+  function detectDocumentType(text){
+    var t = stripAccents((text || '').toLowerCase());
+    var hasDevis = /\bdevis\b/.test(t);
+    var hasFacture = /\bfacture\b/.test(t);
+    if(hasDevis && !hasFacture) return 'devis';
+    if(hasFacture) return 'facture';
+    return 'unknown';
+  }
+
   function lineHasAnyKeyword(line, keywords){
     var norm = stripAccents(line.toLowerCase()).replace(/[\s-]+/g, '');
     return keywords.some(function(k){ return norm.indexOf(stripAccents(k).replace(/[\s-]+/g, '')) !== -1; });
@@ -1480,7 +1519,7 @@
         el.querySelector('.bi-date').style.outline = date ? '' : '2px solid var(--danger)';
         return;
       }
-      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar };
+      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar, sourceHash: el.getAttribute('data-source-hash') || '' };
       // Re-checked live (not just at render time) so a duplicate created moments ago — by another
       // card in this same batch, or synced in from another device — is still caught. The first
       // click only warns; a second, deliberate click on "Déposer quand même" is what proceeds.
@@ -1545,9 +1584,9 @@
     btn.disabled = true;
     var skippedInvalid = 0, skippedDuplicate = 0;
     var lastDepositedDate = null;
-    var confirmedSignatures = {}; // catches duplicates *within this same batch*, not just against
-                                   // already-deposited invoices — two identical PDFs dropped together
-                                   // wouldn't otherwise be caught, since neither is "already deposited" yet.
+    var confirmedThisRun = []; // catches duplicates *within this same batch*, not just against
+                                // already-deposited invoices — two identical files dropped together
+                                // wouldn't otherwise be caught, since neither is "already deposited" yet.
     function finish(){
       btn.disabled = false;
       if(lastDepositedDate) jumpUrssafPeriodTo(lastDepositedDate);
@@ -1577,15 +1616,14 @@
       }
       var number = el.querySelector('.bi-number').value.trim();
       var client = el.querySelector('.bi-client').value.trim();
-      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar };
-      var sig = invoiceSignature(candidate);
-      if(findDuplicateInvoice(candidate) || confirmedSignatures[sig]){
+      var candidate = { number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar, sourceHash: el.getAttribute('data-source-hash') || '' };
+      if(findDuplicateInvoice(candidate) || confirmedThisRun.some(function(prev){ return isDuplicateOf(candidate, prev); })){
         skippedDuplicate++;
         next(i + 1);
         return;
       }
       Promise.resolve(addInvoice(Object.assign({ client: client }, candidate)))
-        .then(function(){ confirmedSignatures[sig] = true; el.remove(); lastDepositedDate = date; })
+        .then(function(){ confirmedThisRun.push(candidate); el.remove(); lastDepositedDate = date; })
         .catch(function(){ skippedInvalid++; })
         .then(function(){ next(i + 1); });
     }
@@ -1601,7 +1639,9 @@
     var vente = (data && Number(data.fourniture)) || 0;
     var prestation = (data && Number(data.prestation)) || 0;
     var qualirepar = (data && Number(data.qualirepar)) || 0;
-    var dup = findDuplicateInvoice({ number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar });
+    var sourceHash = (data && data.sourceHash) || '';
+    el.setAttribute('data-source-hash', sourceHash);
+    var dup = findDuplicateInvoice({ number: number, date: date, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar, sourceHash: sourceHash });
     el.innerHTML =
       '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status ok">Lu</span></div>' +
       (dup ? '<div class="batch-item-dup-warning">⚠️ Déjà déposée : n° ' + escapeHtml(dup.number || 'sans référence') +
@@ -1630,6 +1670,21 @@
     attachBatchItemActions(el, key, file);
   }
 
+  function renderBatchItemRejected(key, name, file, rawText, data){
+    var el = findBatchItem(key);
+    if(!el) return;
+    el.innerHTML =
+      '<div class="batch-item-head"><span class="batch-item-name">' + escapeHtml(name) + '</span><span class="batch-item-status rejected">Refusé</span></div>' +
+      '<div class="batch-item-error">Ce fichier ressemble à un devis, pas une facture — un devis n\'est pas une vente conclue, il n\'a donc pas été comptabilisé.</div>' +
+      (rawText ? '<details class="batch-item-rawtext"><summary>Voir le texte détecté</summary><pre>' + escapeHtml(rawText) + '</pre></details>' : '') +
+      '<div class="batch-item-actions"><button type="button" class="link-btn batch-item-ignore" style="margin-top:0;">Ignorer</button><button type="button" class="link-btn batch-item-force-treat" style="margin-top:0;">Traiter quand même</button></div>';
+    el.querySelector('.batch-item-ignore').addEventListener('click', function(){ el.remove(); updateBulkActions(); });
+    el.querySelector('.batch-item-force-treat').addEventListener('click', function(){
+      renderBatchItemResult(key, name, data, file, rawText);
+    });
+    updateBulkActions();
+  }
+
   function runBatch(files){
     if(files.length === 0) return Promise.resolve();
     batchAbort = new AbortController();
@@ -1647,14 +1702,20 @@
       var file = files[i++];
       var key = 'b' + Date.now() + Math.random().toString(36).slice(2, 7);
       addBatchItemPlaceholder(key, file.name);
-      return extractTextFromFile(file).then(function(result){
+      return Promise.all([extractTextFromFile(file), hashFile(file)]).then(function(results){
+        var result = results[0], sourceHash = results[1];
         if(batchAbort.signal.aborted) return;
         // A plain string is OCR output (no coordinates); an object is a PDF text layer,
         // which carries per-word X positions and can use the column-aware parser.
         var isStructured = result && typeof result === 'object';
         var data = isStructured ? parseInvoiceStructured(result) : parseInvoiceText(result);
+        data.sourceHash = sourceHash;
         var rawText = isStructured ? result.text : result;
-        renderBatchItemResult(key, file.name, data, file, rawText);
+        if(detectDocumentType(rawText) === 'devis'){
+          renderBatchItemRejected(key, file.name, file, rawText, data);
+        } else {
+          renderBatchItemResult(key, file.name, data, file, rawText);
+        }
       }).catch(function(err){
         renderBatchItemError(key, file.name, file, err);
         if(isEngineError(err)){
