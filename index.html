@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Seuil</title>
+<title>Cotiz'Rapide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -99,7 +99,8 @@
   .topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
   .brand{ display:flex; align-items:center; gap:14px; }
   .brand-mark{ width:44px; height:44px; flex:none; color:var(--accent); }
-  .brand h1{ font-size:23px; margin:0; color:var(--ink); }
+  .brand h1{ font-size:23px; margin:0; color:var(--ink); line-height:1.25; }
+  .brand-byline{ display:block; font-size:11px; font-weight:500; color:var(--ink-faint); }
   .brand .tagline{ margin:2px 0 0; font-size:13px; color:var(--ink-soft); }
   .sync-state{ font-size:12px; color:var(--ink-faint); display:flex; align-items:center; gap:6px; }
   .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:none; }
@@ -113,7 +114,7 @@
     padding:28px 26px; display:flex; flex-direction:column; gap:14px; align-items:center; text-align:center;
   }
   .auth-card .brand-mark{ color:var(--accent); }
-  .auth-card h1{ font-size:22px; margin:4px 0 0; color:var(--ink); }
+  .auth-card h1{ font-size:22px; margin:4px 0 0; color:var(--ink); line-height:1.25; }
   .auth-card .tagline{ margin:0 0 6px; font-size:13px; color:var(--ink-soft); }
   .auth-card label{
     width:100%; text-align:left; font-size:12px; color:var(--ink-soft); font-weight:600;
@@ -315,7 +316,7 @@
       <path d="M24 34 L33 20" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
       <path d="M6 34h3M39 34h3M24 12v3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
     </svg>
-    <h1>Seuil</h1>
+    <h1>Cotiz'Rapide <span class="brand-byline">by Gabin Gouy-Pailler</span></h1>
     <p class="tagline">Connexion requise pour accéder à vos factures</p>
     <label for="auth-email">Email
       <input id="auth-email" type="email" autocomplete="username" required>
@@ -338,7 +339,7 @@
         <path d="M6 34h3M39 34h3M24 12v3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
       </svg>
       <div>
-        <h1>Seuil</h1>
+        <h1>Cotiz'Rapide <span class="brand-byline">by Gabin Gouy-Pailler</span></h1>
         <p class="tagline">Déposez vos factures déjà émises — vente &amp; prestation — pour la déclaration URSSAF</p>
       </div>
     </div>
