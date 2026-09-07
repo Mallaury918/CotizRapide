@@ -520,40 +520,46 @@
       vente_amount: invoice.venteAmount || 0, prestation_amount: invoice.prestationAmount || 0 };
   }
 
+  // Hoisted to module scope (not just local to initSupabaseBackend) so addInvoice/deleteInvoice/
+  // saveThresholds can call them directly right after a write — the device that just made a change
+  // must see it immediately, rather than waiting on a realtime round-trip that only exists to catch
+  // up *other* open tabs/devices.
+  function supaRefreshInvoices(){
+    if(!supa) return;
+    supa.from('invoices').select('*').order('date', { ascending: false }).limit(1000).then(function(res){
+      if(res.error){ console.error('supabase invoices error', res.error); return; }
+      var next = {};
+      (res.data || []).forEach(function(row){ next[row.id] = supaRowToInvoice(row); });
+      state.invoices = next;
+      renderAll();
+    });
+  }
+  function supaRefreshThresholds(){
+    if(!supa) return;
+    supa.from('settings').select('*').eq('key', 'thresholds').maybeSingle().then(function(res){
+      if(res.error){ console.error('supabase settings error', res.error); return; }
+      state.thresholds = Object.assign({}, DEFAULT_THRESHOLDS, (res.data && res.data.value) || {});
+      renderGauges();
+      renderUrssaf();
+      fillThresholdInputs();
+    });
+  }
+
   function initSupabaseBackend(){
     loadSupabaseJs().then(function(supabaseLib){
       supa = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       state.backend = 'supabase';
       setSyncState('db'); // same "Enregistré et synchronisé" indicator as the Claude-artifact db backend
 
-      function refreshInvoices(){
-        supa.from('invoices').select('*').order('date', { ascending: false }).limit(1000).then(function(res){
-          if(res.error){ console.error('supabase invoices error', res.error); return; }
-          var next = {};
-          (res.data || []).forEach(function(row){ next[row.id] = supaRowToInvoice(row); });
-          state.invoices = next;
-          renderAll();
-        });
-      }
-      function refreshThresholds(){
-        supa.from('settings').select('*').eq('key', 'thresholds').maybeSingle().then(function(res){
-          if(res.error){ console.error('supabase settings error', res.error); return; }
-          state.thresholds = Object.assign({}, DEFAULT_THRESHOLDS, (res.data && res.data.value) || {});
-          renderGauges();
-          renderUrssaf();
-          fillThresholdInputs();
-        });
-      }
-
-      refreshInvoices();
-      refreshThresholds();
+      supaRefreshInvoices();
+      supaRefreshThresholds();
 
       // Realtime: any device's change refreshes every other open tab automatically.
       supa.channel('public:invoices')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, refreshInvoices)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, supaRefreshInvoices)
         .subscribe();
       supa.channel('public:settings')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, refreshThresholds)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, supaRefreshThresholds)
         .subscribe();
     }).catch(function(err){
       console.error('supabase init failed', err);
@@ -572,6 +578,7 @@
     if(state.backend === 'supabase'){
       return supa.from('invoices').insert(invoiceToSupaRow(invoice)).then(function(res){
         if(res.error){ console.error('add invoice failed', res.error); throw res.error; }
+        supaRefreshInvoices();
       });
     }
     var id = uid();
@@ -586,7 +593,10 @@
       return;
     }
     if(state.backend === 'supabase'){
-      supa.from('invoices').delete().eq('id', id).then(function(res){ if(res.error) console.error('delete failed', res.error); });
+      supa.from('invoices').delete().eq('id', id).then(function(res){
+        if(res.error) console.error('delete failed', res.error);
+        else supaRefreshInvoices();
+      });
       return;
     }
     delete state.invoices[id];
@@ -599,7 +609,10 @@
       return;
     }
     if(state.backend === 'supabase'){
-      supa.from('settings').upsert({ key: 'thresholds', value: t }).then(function(res){ if(res.error) console.error('save thresholds failed', res.error); });
+      supa.from('settings').upsert({ key: 'thresholds', value: t }).then(function(res){
+        if(res.error) console.error('save thresholds failed', res.error);
+        else supaRefreshThresholds();
+      });
       return;
     }
     state.thresholds = t;
