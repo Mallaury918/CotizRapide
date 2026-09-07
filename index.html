@@ -934,11 +934,11 @@
     var totQualirepar = inPeriod.reduce(function(s,i){ return s + (Number(i.qualireparAmount) || 0); }, 0);
     document.getElementById('period-label').textContent = periodLabel();
     document.getElementById('urssaf-stats').innerHTML =
-      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente) + '</div><div class="stat-label">Ventes de marchandises</div></div>' +
-      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totPresta) + '</div><div class="stat-label">Prestations de services</div></div>' +
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente) + '</div><div class="stat-label">📦 Ventes de marchandises</div></div>' +
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totPresta) + '</div><div class="stat-label">🔧 Prestations de services</div></div>' +
       (state.thresholds.showQualirepar ?
-        '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totQualirepar) + '</div><div class="stat-label">dont QualiRépar</div></div>' : '') +
-      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente + totPresta) + '</div><div class="stat-label">Total période (' + inPeriod.length + ' facture' + (inPeriod.length > 1 ? 's' : '') + ')</div></div>';
+        '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totQualirepar) + '</div><div class="stat-label">🌱 dont QualiRépar</div></div>' : '') +
+      '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente + totPresta) + '</div><div class="stat-label">🧾 Total période (' + inPeriod.length + ' facture' + (inPeriod.length > 1 ? 's' : '') + ')</div></div>';
 
     var t = state.thresholds;
     var cotisVente = totVente * (t.venteTauxCotisation || 0) / 100;
