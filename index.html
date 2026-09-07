@@ -106,6 +106,27 @@
   .sync-dot.live{ background:var(--ok); }
   .sync-dot.local{ background:var(--warn); }
 
+  .auth-gate{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .auth-gate[hidden]{ display:none; }
+  .auth-card{
+    width:100%; max-width:340px; background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:28px 26px; display:flex; flex-direction:column; gap:14px; align-items:center; text-align:center;
+  }
+  .auth-card .brand-mark{ color:var(--accent); }
+  .auth-card h1{ font-size:22px; margin:4px 0 0; color:var(--ink); }
+  .auth-card .tagline{ margin:0 0 6px; font-size:13px; color:var(--ink-soft); }
+  .auth-card label{
+    width:100%; text-align:left; font-size:12px; color:var(--ink-soft); font-weight:600;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .auth-card input{
+    padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink);
+    font-size:14px; font-family:'Public Sans', sans-serif;
+  }
+  .auth-card input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .auth-card .btn-primary{ width:100%; }
+  .auth-error{ font-size:12px; color:var(--danger); min-height:1em; }
+
   .layout{ display:grid; grid-template-columns:0.95fr 1.05fr; gap:18px; align-items:start; }
   @media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
 
@@ -276,7 +297,30 @@
 </head>
 <body>
 
-<div class="page">
+<div id="boot-loading" class="auth-gate">Chargement…</div>
+
+<div class="auth-gate" id="auth-gate" hidden>
+  <form class="auth-card" id="auth-form">
+    <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M6 34a18 18 0 0 1 36 0" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+      <circle cx="24" cy="34" r="2.6" fill="currentColor"/>
+      <path d="M24 34 L33 20" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M6 34h3M39 34h3M24 12v3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+    </svg>
+    <h1>Seuil</h1>
+    <p class="tagline">Connexion requise pour accéder à vos factures</p>
+    <label for="auth-email">Email
+      <input id="auth-email" type="email" autocomplete="username" required>
+    </label>
+    <label for="auth-password">Mot de passe
+      <input id="auth-password" type="password" autocomplete="current-password" required>
+    </label>
+    <div class="auth-error" id="auth-error"></div>
+    <button class="btn-primary" type="submit" id="auth-submit">Se connecter</button>
+  </form>
+</div>
+
+<div class="page" id="page-root" hidden>
   <header class="topbar">
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -290,7 +334,7 @@
         <p class="tagline">Déposez vos factures déjà émises — vente &amp; prestation — pour la déclaration URSSAF</p>
       </div>
     </div>
-    <div class="sync-state"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">Connexion…</span></div>
+    <div class="sync-state"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">Connexion…</span><button type="button" class="link-btn" id="logout-btn" style="margin-top:0;" hidden>Se déconnecter</button></div>
   </header>
 
   <main class="layout">
@@ -457,6 +501,14 @@
     else { dot.className = 'sync-dot'; text.textContent = 'Connexion…'; }
   }
 
+  // #page-root starts hidden (the auth gate needs to own the screen until Supabase confirms a
+  // session) — every backend, not just Supabase, must reveal it once it's actually ready to render.
+  function revealApp(){
+    document.getElementById('boot-loading').hidden = true;
+    document.getElementById('auth-gate').hidden = true;
+    document.getElementById('page-root').hidden = false;
+  }
+
   function initLocalBackend(){
     var loaded = readLocal();
     state.invoices = loaded.invoices;
@@ -464,12 +516,14 @@
     state.backend = 'local';
     setSyncState('local');
     fillThresholdInputs();
+    revealApp();
     renderAll();
   }
 
   function initDbBackend(){
     state.backend = 'db';
     setSyncState('db');
+    revealApp();
     db.collection('invoices').orderBy('date', 'desc').limit(1000).onSnapshot(function(snap){
       var next = {};
       snap.docs.forEach(function(d){
@@ -545,27 +599,74 @@
     });
   }
 
+  var supabaseSyncStarted = false;
+
+  function showAuthGate(errorMsg){
+    document.getElementById('boot-loading').hidden = true;
+    document.getElementById('page-root').hidden = true;
+    document.getElementById('auth-gate').hidden = false;
+    document.getElementById('auth-error').textContent = errorMsg || '';
+    document.getElementById('auth-submit').disabled = false;
+  }
+  function showAppAfterAuth(){
+    revealApp();
+    document.getElementById('logout-btn').hidden = false;
+    setSyncState('db'); // same "Enregistré et synchronisé" indicator as the Claude-artifact db backend
+  }
+
+  // Every table read/write goes through Supabase's Row Level Security, which is configured to
+  // require a signed-in user — this login screen is what obtains that session, it isn't itself
+  // the security boundary. Accounts are created by the owner in the Supabase dashboard, not from
+  // this form: there is deliberately no public sign-up here.
   function initSupabaseBackend(){
     loadSupabaseJs().then(function(supabaseLib){
       supa = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       state.backend = 'supabase';
-      setSyncState('db'); // same "Enregistré et synchronisé" indicator as the Claude-artifact db backend
 
-      supaRefreshInvoices();
-      supaRefreshThresholds();
-
-      // Realtime: any device's change refreshes every other open tab automatically.
-      supa.channel('public:invoices')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, supaRefreshInvoices)
-        .subscribe();
-      supa.channel('public:settings')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, supaRefreshThresholds)
-        .subscribe();
+      supa.auth.onAuthStateChange(function(event, session){
+        if(session && session.user){
+          showAppAfterAuth();
+          if(!supabaseSyncStarted){
+            supabaseSyncStarted = true;
+            supaRefreshInvoices();
+            supaRefreshThresholds();
+            // Realtime: any device's change refreshes every other open tab automatically.
+            supa.channel('public:invoices')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, supaRefreshInvoices)
+              .subscribe();
+            supa.channel('public:settings')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, supaRefreshThresholds)
+              .subscribe();
+          }
+        } else {
+          supabaseSyncStarted = false;
+          showAuthGate();
+        }
+      });
     }).catch(function(err){
       console.error('supabase init failed', err);
       initLocalBackend();
     });
   }
+
+  document.getElementById('auth-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    if(!supa) return;
+    var email = document.getElementById('auth-email').value.trim();
+    var password = document.getElementById('auth-password').value;
+    document.getElementById('auth-error').textContent = '';
+    document.getElementById('auth-submit').disabled = true;
+    supa.auth.signInWithPassword({ email: email, password: password }).then(function(res){
+      if(res.error){
+        showAuthGate('Email ou mot de passe incorrect.');
+      }
+      // on success, onAuthStateChange fires and shows the app
+    });
+  });
+  document.getElementById('logout-btn').addEventListener('click', function(){
+    if(!supa) return;
+    supa.auth.signOut();
+  });
 
   // ---------------- CRUD ----------------
   function addInvoice(invoice){
