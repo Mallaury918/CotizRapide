@@ -863,6 +863,19 @@
     state.periodRef = new Date(state.periodRef.getFullYear(), state.periodRef.getMonth() + dir * step, 1);
     renderUrssaf();
   }
+  // A newly deposited invoice only shows up in "Déclaration URSSAF" when its date falls inside the
+  // period currently displayed there (unlike the gauges, which are always the whole year) — jump
+  // that view to the invoice's own period so a deposit is never invisible just because whatever
+  // month/quarter was last being browsed happens to be a different one.
+  function jumpUrssafPeriodTo(dateStr){
+    if(!dateStr) return;
+    var parts = dateStr.split('-');
+    if(parts.length !== 3) return;
+    var d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    if(isNaN(d.getTime())) return;
+    state.periodRef = d;
+    renderUrssaf();
+  }
   function renderUrssaf(){
     var range = periodRange(), start = range[0], end = range[1];
     var inPeriod = invoicesList().filter(function(i){ return i.date >= start && i.date <= end; });
@@ -1377,6 +1390,7 @@
       }
       confirmBtn.disabled = true;
       Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar })).then(function(){
+        jumpUrssafPeriodTo(date);
         el.remove();
         updateBulkActions();
       }).catch(function(){ confirmBtn.disabled = false; });
@@ -1410,9 +1424,11 @@
     if(items.length === 0) return;
     btn.disabled = true;
     var skipped = 0;
+    var lastDepositedDate = null;
     function next(i){
       if(i >= items.length){
         btn.disabled = false;
+        if(lastDepositedDate) jumpUrssafPeriodTo(lastDepositedDate);
         updateBulkActions();
         var note = document.getElementById('batch-note');
         if(skipped > 0){
@@ -1436,7 +1452,7 @@
       var number = el.querySelector('.bi-number').value.trim();
       var client = el.querySelector('.bi-client').value.trim();
       Promise.resolve(addInvoice({ number: number, date: date, client: client, venteAmount: vente, prestationAmount: prestation, qualireparAmount: qualirepar }))
-        .then(function(){ el.remove(); })
+        .then(function(){ el.remove(); lastDepositedDate = date; })
         .catch(function(){ skipped++; })
         .then(function(){ next(i + 1); });
     }
