@@ -219,7 +219,8 @@
   .batch-actions[hidden]{ display:none; }
   .btn-primary.small{ padding:7px 11px; font-size:12.5px; margin-top:0; }
 
-  .batch-results{ display:flex; flex-direction:column; gap:10px; }
+  .batch-results{ display:flex; flex-direction:column; gap:10px; max-height:640px; overflow-y:auto; overflow-x:hidden; }
+  .batch-results[hidden]{ display:none; }
   .batch-item{ border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--card-soft); }
   .batch-item-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
   .batch-item-name{ font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -374,7 +375,10 @@
 
         <div class="batch-actions" id="batch-bulk-actions" hidden>
           <span id="batch-bulk-count"></span>
-          <button type="button" class="btn-primary small" id="batch-confirm-all">Déposer tout</button>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="link-btn" id="batch-toggle-results" style="margin-top:0;">Masquer</button>
+            <button type="button" class="btn-primary small" id="batch-confirm-all">Déposer tout</button>
+          </div>
         </div>
 
         <div class="batch-results" id="batch-results"></div>
@@ -1411,11 +1415,22 @@
   function updateBulkActions(){
     var bar = document.getElementById('batch-bulk-actions');
     var confirmButtons = document.querySelectorAll('#batch-results .batch-item-confirm');
+    var toggleBtn = document.getElementById('batch-toggle-results');
     if(confirmButtons.length === 0){ bar.hidden = true; return; }
     bar.hidden = false;
     document.getElementById('batch-bulk-count').textContent =
       confirmButtons.length + ' facture' + (confirmButtons.length > 1 ? 's' : '') + ' lue' + (confirmButtons.length > 1 ? 's' : '') + ' en attente';
+    toggleBtn.textContent = document.getElementById('batch-results').hidden ? 'Afficher (' + confirmButtons.length + ')' : 'Masquer';
   }
+
+  // With hundreds of files read at once, showing every review card at all times makes the page
+  // unusably long — this lets the whole list be collapsed away (the pending count stays visible
+  // on the bar above) without losing anything: "Déposer tout" still confirms every hidden item too.
+  document.getElementById('batch-toggle-results').addEventListener('click', function(){
+    var resultsEl = document.getElementById('batch-results');
+    resultsEl.hidden = !resultsEl.hidden;
+    updateBulkActions();
+  });
 
   document.getElementById('batch-confirm-all').addEventListener('click', function(){
     var btn = this;
