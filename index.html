@@ -439,7 +439,6 @@
         <div class="invoices-list" id="invoices-list"></div>
         <div class="export-row" style="margin-top:12px;">
           <button class="link-btn danger" id="delete-all-invoices" type="button" style="margin-top:0;">Supprimer tout</button>
-          <button class="link-btn" id="export-csv" type="button" style="margin-top:0;">Exporter en CSV</button>
         </div>
       </div>
     </section>
@@ -475,7 +474,6 @@
   };
 
   var db = null;
-  var downloads = null;
   var pendingFiles = [];
   var batchAbort = null;
 
@@ -905,25 +903,6 @@
     renderGauges();
     renderUrssaf();
     renderInvoicesList();
-  }
-
-  // ---------------- CSV export ----------------
-  function toCsv(){
-    var rows = [['Numéro','Date','Client','Vente (€)','Prestation (€)','Total (€)']];
-    invoicesList().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }).forEach(function(inv){
-      rows.push([
-        inv.number || '', inv.date || '', inv.client || '',
-        (Number(inv.venteAmount)||0).toFixed(2).replace('.', ','),
-        (Number(inv.prestationAmount)||0).toFixed(2).replace('.', ','),
-        invoiceTotal(inv).toFixed(2).replace('.', ',')
-      ]);
-    });
-    return rows.map(function(r){
-      return r.map(function(cell){
-        var s = String(cell);
-        return /[";\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
-      }).join(';');
-    }).join('\r\n');
   }
 
   // ---------------- automatic reading (local OCR, no server / no Claude call) ----------------
@@ -1568,29 +1547,6 @@
     deleteAllInvoices();
   });
 
-  document.getElementById('export-csv').addEventListener('click', function(){
-    var csv = '﻿' + toCsv();
-    // Inside the Claude artifact viewer, a plain <a download> link is inert — the sandbox blocks
-    // it outright, so the `downloads` capability's own save prompt is the only thing that works
-    // there. Standalone (this page hosted on its own domain), window.claude never exists, so
-    // `downloads` stays null and the plain download below runs instead.
-    if(downloads){
-      downloads.save({ filename: 'factures-seuil-' + isoDate(new Date()) + '.csv', data: csv }).catch(function(err){
-        if(err && err.code === 'declined') return;
-        console.error('export failed', err);
-      });
-    } else {
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'factures-seuil-' + isoDate(new Date()) + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-    }
-  });
-
   // ---------------- boot ----------------
   renderAll(); // render an empty/local state immediately, then upgrade if db resolves
 
@@ -1599,7 +1555,6 @@
       if(resolved){ db = resolved; initDbBackend(); fillThresholdInputs(); }
       else { initLocalBackend(); }
     }).catch(function(){ initLocalBackend(); });
-    window.claude.use('downloads').then(function(resolved){ downloads = resolved; }).catch(function(){ downloads = null; });
   } else {
     initSupabaseBackend();
   }
