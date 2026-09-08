@@ -849,15 +849,18 @@
   }
 
   function invoicesList(){ return Object.keys(state.invoices).map(function(id){ return Object.assign({ id: id }, state.invoices[id]); }); }
-  // QualiRépar's reimbursement is income tied to the repair service, not the parts — it's added
-  // into "prestation" for every total/threshold/cotisation computation, while still being kept in
-  // its own stored field so it can be shown (or hidden) as a distinct line in the interface.
+  // QualiRépar isn't extra income on top of vente/prestation: the invoice's own vente+prestation
+  // already total the full pre-discount price (e.g. 100€ pièce + 10€ main d'oeuvre = 110€) — the
+  // QualiRépar amount is just the portion of that same 110€ that the repair fund pays instead of
+  // the customer (the invoice shows it as a deduction to what the customer owes). Adding it again
+  // on top would double-count it. It's kept in its own stored field purely so it can be shown as
+  // an informative, separate line — it does not feed into any total, threshold, or cotisation.
   function invoiceTotalByType(inv, type){
     if(type === 'vente') return Number(inv.venteAmount) || 0;
-    return (Number(inv.prestationAmount) || 0) + (Number(inv.qualireparAmount) || 0);
+    return Number(inv.prestationAmount) || 0;
   }
   function invoiceTotal(inv){
-    return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0) + (Number(inv.qualireparAmount)||0);
+    return (Number(inv.venteAmount)||0) + (Number(inv.prestationAmount)||0);
   }
 
   // Prefer the invoice number when there is one (the most reliable signal a business actually
@@ -937,7 +940,7 @@
     document.getElementById('year-label').textContent = state.year;
     var t = state.thresholds;
     var totVente = annualTotal(state.year, 'vente');
-    var totPresta = annualTotal(state.year, 'prestation'); // already includes qualireparAmount
+    var totPresta = annualTotal(state.year, 'prestation'); // qualireparAmount excluded — see invoiceTotalByType
     document.getElementById('ca-ytd').innerHTML =
       '<span class="ca-ytd-label">🚀 Chiffre d\'affaires ' + state.year + '</span>' +
       '<span class="ca-ytd-value">' + fmtEuro(totVente + totPresta) + '</span>';
@@ -999,14 +1002,14 @@
     var range = periodRange(), start = range[0], end = range[1];
     var inPeriod = invoicesList().filter(function(i){ return i.date >= start && i.date <= end; });
     var totVente = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'vente'); }, 0);
-    var totPresta = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'prestation'); }, 0); // includes qualirepar
+    var totPresta = inPeriod.reduce(function(s,i){ return s + invoiceTotalByType(i, 'prestation'); }, 0); // qualirepar excluded, shown separately below
     var totQualirepar = inPeriod.reduce(function(s,i){ return s + (Number(i.qualireparAmount) || 0); }, 0);
     document.getElementById('period-label').textContent = periodLabel();
     document.getElementById('urssaf-stats').innerHTML =
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente) + '</div><div class="stat-label">📦 Ventes de marchandises</div></div>' +
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totPresta) + '</div><div class="stat-label">🔧 Prestations de services</div></div>' +
       (state.thresholds.showQualirepar ?
-        '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totQualirepar) + '</div><div class="stat-label">🌱 dont QualiRépar</div></div>' : '') +
+        '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totQualirepar) + '</div><div class="stat-label">🌱 QualiRépar (info, hors total)</div></div>' : '') +
       '<div class="stat-tile"><div class="stat-num">' + fmtEuro(totVente + totPresta) + '</div><div class="stat-label">🧾 Total période (' + inPeriod.length + ' facture' + (inPeriod.length > 1 ? 's' : '') + ')</div></div>';
 
     var t = state.thresholds;
@@ -1033,12 +1036,12 @@
 
   function invoiceRowHtml(i){
     var totVente = invoiceTotalByType(i, 'vente');
-    var totPresta = invoiceTotalByType(i, 'prestation'); // already includes qualireparAmount
+    var totPresta = invoiceTotalByType(i, 'prestation'); // qualireparAmount excluded, shown as its own tag below
     var qualirepar = Number(i.qualireparAmount) || 0;
     var tags = '';
     if(totVente > 0) tags += '<span class="inv-tag vente">Vente ' + fmtEuro(totVente) + '</span>';
     if(totPresta > 0) tags += '<span class="inv-tag prestation">Prestation ' + fmtEuro(totPresta) + '</span>';
-    if(state.thresholds.showQualirepar && qualirepar > 0) tags += '<span class="inv-tag qualirepar">dont QualiRépar ' + fmtEuro(qualirepar) + '</span>';
+    if(state.thresholds.showQualirepar && qualirepar > 0) tags += '<span class="inv-tag qualirepar">QualiRépar ' + fmtEuro(qualirepar) + '</span>';
     return '<div class="invoice-row" data-id="' + i.id + '">' +
       '<div class="invoice-row-top">' +
         '<span class="inv-id"><span class="inv-number">' + escapeHtml(i.number || 'Sans référence') + '</span><span class="inv-date">' + fmtDateShort(i.date) + '</span></span>' +
