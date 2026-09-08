@@ -1337,6 +1337,15 @@
       if(isFinite(val)) amounts.push(val);
     }
     if(amounts.length > 0) return amounts;
+    // A phone number (or another long digit run sharing a line with it, like an IMEI/serial —
+    // "SN/IMEI : 869392062067864" — that ends up merged onto the same row as a price column
+    // once several description lines and one price row get grouped together) looks exactly
+    // like a sequence of bare currency amounts to the fallback regex below ("26.96.70.19" or
+    // "8693920620" reads as several "XX,XX€"-shaped numbers). That's only a risk here, since
+    // every amount above already carried an explicit €/eur marker confirming it — skip the
+    // risky bare fallback entirely rather than dropping the whole line (which would throw away
+    // a real, currency-marked amount just because an unrelated digit run sits next to it).
+    if(PHONE_NUMBER_RE.test(line)) return amounts;
     // Fallback: a bare amount with exactly two decimals (typical currency formatting) and
     // no adjacent € — common when a table lists amounts under a "Montant (€)" column header
     // instead of repeating the symbol on every row.
@@ -1360,7 +1369,6 @@
     var currentSection = null;
     lines.forEach(function(line){
       if(lineHasAnyKeyword(line, SKIP_LINE_KEYWORDS)) return;
-      if(PHONE_NUMBER_RE.test(line)) return;
       var amounts = extractAmounts(line);
       if(amounts.length === 0){
         var hasVente = lineHasAnyKeyword(line, VENTE_KEYWORDS);
@@ -1404,11 +1412,14 @@
     }
 
     var number = null;
-    // Require an actual "facture n°" / "n°" / "réf" marker — a bare "n" before any word
-    // (very common in French text, e.g. "prestation main...") is not enough on its own.
+    // Require an actual "facture", "facture n°", "n°" or "réf" marker — a bare "n" before any
+    // word (very common in French text, e.g. "prestation main...") is not enough on its own.
+    // "n°" after "facture" is itself optional: many invoices title themselves "FACTURE F202609-
+    // 112" with the reference straight after the word, no "N°" in between — the group as a
+    // whole (not just its °/º/o symbol) must be what's optional, or that common form never matches.
     // Require at least one digit in the captured value — otherwise "N° SIREN : 123456789"
     // matches "SIREN" itself (the label) rather than skipping to the actual number.
-    var nm = (text || '').match(/\b(?:facture\s*n[°ºo]?|n[°ºo]|r[ée]f(?:\.|érence)?)\s*[:\-]?\s*((?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{2,19})\b/i);
+    var nm = (text || '').match(/\b(?:facture\s*(?:n[°ºo])?|n[°ºo]|r[ée]f(?:\.|érence)?)\s*[:\-]?\s*((?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{2,19})\b/i);
     if(nm) number = nm[1];
 
     var client = extractClientName(text);
@@ -1422,6 +1433,11 @@
   // the next — this recognizes that label-only line so the name right after it outranks every
   // other guess (in particular the seller's own name, found first under "Vendeur :" above it).
   var BUYER_LABEL_ONLY_RE = /^(?:client|acheteur|destinataire|factur[ée]\s*[àa]|adress[ée]\s*[àa])\s*:?\s*$/i;
+  // "À l'attention de" (no colon, name on the next line) is this generator's actual buyer
+  // marker. Unlike BUYER_LABEL_ONLY_RE it's searched anywhere within the line, not required to
+  // be the whole line: it commonly ends up merged with the seller's own name onto the same row
+  // when the two columns' text sits at nearly the same height ("Repar'tel A l'attention de").
+  var ATTENTION_LABEL_RE = /\b[àa]\s*l['’]attention\s*de\b/i;
   var CLIENT_SKIP_WORDS = ['siren','siret','tva','iban','bic','telephone','tel','email','mail','devis','facture',
     'page','total','sous-total','sous total','date','validite','description','quantite','unite','prix','montant',
     'france','rue','avenue','boulevard','route','chemin','allee','impasse','sarl','sas','eurl','sasu',
@@ -1439,6 +1455,12 @@
     return !!t && /[A-Za-zÀ-ÿ]/.test(t) && !/^[\d\s.,\-\/]+$/.test(t);
   }
 
+  // A legal-form suffix ("Vera Vanessa EI", "Jean Dupont SARL") marks a business's own
+  // registered name, not a client — this is the seller's identity line far more often than a
+  // customer's, so it must not be picked as the client just because it's shaped like a name.
+  // Matched as a whole word, not a substring, so it can't misfire on an ordinary name.
+  var COMPANY_SUFFIX_WORDS = ['ei', 'eirl', 'sarl', 'sas', 'sasu', 'eurl', 'sa', 'sci', 'scp', 'selarl'];
+
   // A line naming exactly one person: 2-4 capitalized words, no digits, none of the
   // business/address vocabulary that fills the rest of an invoice header.
   function isPersonNameLine(line){
@@ -1446,6 +1468,7 @@
     if(lineHasAnyKeyword(line, CLIENT_SKIP_WORDS)) return false;
     var words = line.split(/\s+/).filter(Boolean);
     if(words.length < 2 || words.length > 4) return false;
+    if(words.some(function(w){ return COMPANY_SUFFIX_WORDS.indexOf(stripAccents(w).toLowerCase()) !== -1; })) return false;
     return words.every(function(w){ return /^[A-ZÀ-Ý][\wÀ-ÿ'’.\-]*$/.test(w); });
   }
 
@@ -1471,7 +1494,7 @@
     }
     var afterBuyerLabelIdx = -1;
     for(var b = 0; b < lines.length; b++){
-      if(BUYER_LABEL_ONLY_RE.test(lines[b])){ afterBuyerLabelIdx = b; break; }
+      if(BUYER_LABEL_ONLY_RE.test(lines[b]) || ATTENTION_LABEL_RE.test(lines[b])){ afterBuyerLabelIdx = b; break; }
     }
     var firstCandidateIdx = -1, firstAfterContactIdx = -1, firstAfterBuyerLabelIdx = -1;
     for(var k = 1; k < lines.length; k++){ // skip line 0: almost always the seller's own name
