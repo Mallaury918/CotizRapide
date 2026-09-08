@@ -1155,21 +1155,31 @@
     return loadPdfFirstPage(file).then(function(page){
       return page.getTextContent();
     }).then(function(content){
-      var rows = {};
-      (content.items || []).forEach(function(item){
-        if(!item.str) return;
-        // Bucket to the nearest 3pt rather than the exact value: items on the same visual
-        // row can carry slightly different baselines (sub/superscript, mixed font sizes),
-        // and 3pt is still well under typical line spacing so separate rows don't merge.
-        var y = Math.round(item.transform[5] / 3) * 3;
-        if(!rows[y]) rows[y] = [];
-        rows[y].push({ x: item.transform[4], str: item.str });
+      var raw = (content.items || [])
+        .filter(function(item){ return !!item.str; })
+        .map(function(item){ return { x: item.transform[4], y: item.transform[5], str: item.str }; });
+      raw.sort(function(a, b){ return b.y - a.y; }); // top to bottom
+      // Group into visual rows by proximity to the row's own top Y rather than snapping every
+      // item to a fixed grid: items on the same printed row can carry slightly different
+      // baselines (sub/superscript, mixed font sizes, or — as seen with some invoice
+      // generators — a bold right-aligned amount sitting a point or two off its own label).
+      // A fixed-grid round(y/3)*3 can split exactly such a pair into two separate "rows" when
+      // they straddle a grid boundary, even though they're visually on the same line; comparing
+      // relative distance instead avoids that boundary artifact.
+      var ROW_TOLERANCE = 3;
+      var rowGroups = [];
+      raw.forEach(function(item){
+        var current = rowGroups.length ? rowGroups[rowGroups.length - 1] : null;
+        if(!current || (current.top - item.y) > ROW_TOLERANCE){
+          current = { top: item.y, tokens: [] };
+          rowGroups.push(current);
+        }
+        current.tokens.push(item);
       });
-      var lines = Object.keys(rows).map(Number).sort(function(a, b){ return b - a; }) // top to bottom
-        .map(function(y){
-          var tokens = rows[y].sort(function(a, b){ return a.x - b.x; });
-          return { tokens: tokens, text: tokens.map(function(t){ return t.str; }).join(' ') };
-        });
+      var lines = rowGroups.map(function(row){
+        var tokens = row.tokens.slice().sort(function(a, b){ return a.x - b.x; });
+        return { tokens: tokens, text: tokens.map(function(t){ return t.str; }).join(' ') };
+      });
       return { text: lines.map(function(l){ return l.text; }).join('\n'), lines: lines };
     });
   }
