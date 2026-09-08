@@ -1299,7 +1299,17 @@
   // this business's activity.
   var VENTE_KEYWORDS = ['piece','pieces','piece detachee','pieces detachees','fourniture','fournitures','marchandise','marchandises','produit','produits','article','articles','vente','materiel','materiaux','accessoire','accessoires','consommable','consommables','composant','composants','kit','equipement','equipements','matiere premiere','quincaillerie','ecran','ecrans','vitre','vitres','batterie','batteries','coque','coques','connecteur','connecteurs','chargeur','chargeurs','cable','cables','haut-parleur','haut-parleurs','camera','cameras','carte mere','bouton','boutons','nappe','nappes','capot','capots','boitier','boitiers','protection ecran','film de protection'];
   var PRESTATION_KEYWORDS = ["main d'oeuvre",'main doeuvre','prestation','prestations','prestation de service','realisation','execution','travaux','travail','intervention','interventions','depannage','assistance','assistance technique','installation','pose','montage','demontage','reparation','reparations','remise en etat','forfait','forfaitaire','diagnostic','expertise','etude','honoraires','conseil','consultation','accompagnement','audit','formation','heure','heures','taux horaire','temps passe','vacation','deplacement','frais de deplacement','service','services','developpement','maintenance','support technique','parametrage','configuration'];
-  var SKIP_LINE_KEYWORDS = ['total','sous-total','sous total','tva','acompte','remise','net a payer','a payer','solde','avoir','arrhes','rabais','ristourne','escompte','net ttc','net ht','a regler','recapitulatif','montant paye','montant du'];
+  // "Remise"/"rabais"/"ristourne" are deliberately NOT in this list: a discount can appear as its
+  // own genuine line item in the products table (e.g. "4  Remise verre trempé pour Samsung A17
+  // 1  -10,00 €  -10,00 €  -10,00 €", numbered right alongside every other item) rather than only
+  // as an informational summary note — skipping it would silently drop a real negative amount
+  // instead of subtracting it. extractAmounts already reads the line's own "-" sign correctly, so
+  // counting the line (instead of skipping it) gives the right total. "escompte" stays in this
+  // list though: it isn't a discount keyword on real invoices from this business, but the word
+  // used in the standard French late-payment boilerplate ("Pas d'escompte en cas de paiement
+  // anticipé") that appears on every invoice — un-skipping it let "indemnité forfaitaire ... de 40
+  // euros" a few words earlier in that same sentence get misread as a 40€ prestation line.
+  var SKIP_LINE_KEYWORDS = ['total','sous-total','sous total','tva','acompte','escompte','net a payer','a payer','solde','avoir','arrhes','net ttc','net ht','a regler','recapitulatif','montant paye','montant du'];
   // A French phone number (dot/space-separated pairs, e.g. "06.26.96.70.19") looks exactly like a
   // sequence of small currency amounts to the amount regexes below ("26.96.70.19" reads as several
   // "XX,XX€"-shaped numbers) — skip any line containing one before amounts are even extracted.
