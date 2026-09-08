@@ -1351,11 +1351,24 @@
   function parseInvoiceText(text){
     var lines = (text || '').split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
     var vente = 0, prestation = 0, qualirepar = 0;
+    // Some invoicing tools group item rows under a section label ("PRODUITS" / "SERVICES")
+    // rather than repeating the type on every line. Track the current section as lines are
+    // walked top to bottom, so a data row whose own text carries no classifying keyword — e.g.
+    // a continuation line of a multi-line description ("pour iphone 13") that happens to sit
+    // next to the price instead of the first line ("Main d'oeuvre") — still inherits the right
+    // classification instead of always defaulting to goods.
+    var currentSection = null;
     lines.forEach(function(line){
       if(lineHasAnyKeyword(line, SKIP_LINE_KEYWORDS)) return;
       if(PHONE_NUMBER_RE.test(line)) return;
       var amounts = extractAmounts(line);
-      if(amounts.length === 0) return;
+      if(amounts.length === 0){
+        var hasVente = lineHasAnyKeyword(line, VENTE_KEYWORDS);
+        var hasPresta = lineHasAnyKeyword(line, PRESTATION_KEYWORDS);
+        if(hasPresta && !hasVente) currentSection = 'prestation';
+        else if(hasVente && !hasPresta) currentSection = 'vente';
+        return;
+      }
       // A line often shows both a unit price and a line total (e.g. "1  45,00€  45,00€");
       // take the last amount (conventionally the line total in a left-to-right table)
       // rather than summing every number found, which would double-count it.
@@ -1372,6 +1385,7 @@
       // priced, non-skipped line that isn't recognized as labor is treated as goods by default —
       // VENTE_KEYWORDS still helps confirm genuine goods lines but is no longer required to count one.
       if(lineHasAnyKeyword(line, PRESTATION_KEYWORDS)) prestation += lineValue;
+      else if(currentSection === 'prestation') prestation += lineValue;
       else vente += lineValue;
     });
 
