@@ -213,6 +213,12 @@
   .urssaf-estimate-detail{ display:flex; gap:18px; margin-top:8px; font-size:12.5px; color:var(--ink-soft); flex-wrap:wrap; }
   .urssaf-estimate-detail b{ color:var(--ink); font-family:'IBM Plex Mono', monospace; }
   .urssaf-estimate-note{ font-size:11px; color:var(--ink-faint); margin-top:10px; }
+  .urssaf-net{
+    margin-top:12px; padding:12px 14px; background:var(--ok-soft); border-radius:9px;
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  .urssaf-net-label{ font-size:13px; font-weight:700; color:var(--ok); }
+  .urssaf-net-value{ font-size:21px; font-weight:800; color:var(--ok); font-family:'IBM Plex Mono', monospace; }
 
   /* ---- automatic batch reading ---- */
   .dropzone{
@@ -500,7 +506,11 @@
           </div>
           <div class="urssaf-estimate-total" id="urssaf-estimate-total">0 €</div>
           <div class="urssaf-estimate-detail" id="urssaf-estimate-detail"></div>
-          <p class="urssaf-estimate-note">Estimation indicative sur la base de vos taux ci-dessous (cotisations + CFP + taxes CMA) — elle ne remplace pas le calcul officiel de votre espace URSSAF (versement libératoire, ACRE ou régime spécifique non pris en compte). Mettez un taux à 0 s'il ne s'applique pas à votre situation (ex : taxes CMA propres aux artisans, absentes pour un commerçant relevant de la CCI).</p>
+          <div class="urssaf-net">
+            <span class="urssaf-net-label">💶 Ce qu'il vous reste (net estimé)</span>
+            <span class="urssaf-net-value" id="urssaf-net-value">0 €</span>
+          </div>
+          <p class="urssaf-estimate-note">Estimation indicative sur la base de vos taux ci-dessous (cotisations + CFP + taxes CMA) — elle ne remplace pas le calcul officiel de votre espace URSSAF (versement libératoire, ACRE ou régime spécifique non pris en compte). Mettez un taux à 0 s'il ne s'applique pas à votre situation (ex : taxes CMA propres aux artisans, absentes pour un commerçant relevant de la CCI). Le net ci-dessus est le CA de la période moins cette estimation de cotisations — avant votre impôt sur le revenu.</p>
           <div class="thresholds-editor" id="cotis-rates-editor" hidden>
             <div class="grid4">
               <div><label for="tx-vente">Taux vente de marchandises (%)</label><input id="tx-vente" type="number" min="0" max="100" step="0.01"></div>
@@ -1026,6 +1036,10 @@
       '<span>🎓 CFP (' + t.cfpTaux + ' %) : <b>' + fmtEuro(cfp) + '</b></span>' +
       '<span>🏛️ Taxe CMA vente (' + t.cmaVenteTaux + ' %) : <b>' + fmtEuro(cmaVente) + '</b></span>' +
       '<span>🏛️ Taxe CMA prestation (' + t.cmaPrestaTaux + ' %) : <b>' + fmtEuro(cmaPresta) + '</b></span>';
+    // What's actually left in hand for the period: CA (vente + prestation, QualiRépar excluded —
+    // see invoiceTotalByType) minus the cotisations/CFP/CMA estimated just above. Purely
+    // informational, same caveats as the estimate itself (no income tax, no other charges).
+    document.getElementById('urssaf-net-value').textContent = fmtEuro((totVente + totPresta) - totalDu);
   }
 
   // ---------------- invoices list ----------------
