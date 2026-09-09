@@ -1153,13 +1153,19 @@
     });
   }
 
+  // Resolves both the page AND its owning document — the document must be explicitly
+  // .destroy()'d once its page is done with (see callers below): pdf.js keeps a parsed PDF's
+  // fonts, CMaps and image data alive until then, and merely letting the JS reference go out of
+  // scope doesn't free that promptly. Depositing a large batch (100+ PDFs) without ever calling
+  // destroy() accumulates all of it for the rest of the tab's life — reported as a real "Out of
+  // Memory" crash partway through a 119-invoice batch.
   function loadPdfFirstPage(file){
     return loadPdfJs().then(function(pdfjsLib){
       return file.arrayBuffer();
     }).then(function(buf){
       return window.pdfjsLib.getDocument({ data: buf }).promise;
     }).then(function(pdf){
-      return pdf.getPage(1);
+      return pdf.getPage(1).then(function(page){ return { pdf: pdf, page: page }; });
     });
   }
 
@@ -1169,8 +1175,10 @@
      HEADERS (rather than repeated on every row) can still be read correctly by matching
      each amount's position to whichever header it sits under. */
   function pdfFirstPageText(file){
-    return loadPdfFirstPage(file).then(function(page){
-      return page.getTextContent();
+    var doc;
+    return loadPdfFirstPage(file).then(function(d){
+      doc = d;
+      return doc.page.getTextContent();
     }).then(function(content){
       var raw = (content.items || [])
         .filter(function(item){ return !!item.str; })
@@ -1198,11 +1206,14 @@
         return { tokens: tokens, text: tokens.map(function(t){ return t.str; }).join(' ') };
       });
       return { text: lines.map(function(l){ return l.text; }).join('\n'), lines: lines };
-    });
+    }).finally(function(){ if(doc) doc.pdf.destroy(); });
   }
 
   function pdfFirstPageToBlob(file){
-    return loadPdfFirstPage(file).then(function(page){
+    var doc;
+    return loadPdfFirstPage(file).then(function(d){
+        doc = d;
+        var page = doc.page;
         var viewport = page.getViewport({ scale: 2 });
         var canvas = document.createElement('canvas');
         canvas.width = viewport.width;
@@ -1213,7 +1224,7 @@
             canvas.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('canvas_empty')); }, 'image/png');
           });
         });
-      });
+      }).finally(function(){ if(doc) doc.pdf.destroy(); });
   }
 
   /* Re-encode any picked image through canvas as a downsized JPEG before OCR — normalizes
