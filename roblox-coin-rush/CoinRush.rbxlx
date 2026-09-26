@@ -1,0 +1,1532 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Configuration centrale du jeu "Coin Rush".
+-- ⚠️ Remplace les Id = 0 par les vrais IDs créés sur https://create.roblox.com
+-- (Créations > ton expérience > Monétisation > Passes / Produits de développeur).
+-- Tant qu'un Id vaut 0, l'objet s'affiche "Bientôt" dans la boutique et ne peut pas être acheté.
+
+local Config = {}
+
+-- Game Passes : achat unique, avantage permanent.
+Config.GamePasses = {
+	DoubleCoins = {
+		Id = 0,
+		Name = "x2 Pièces",
+		Description = "Double toutes les pièces gagnées. Pour toujours !",
+		Order = 1,
+	},
+	VIP = {
+		Id = 0,
+		Name = "VIP",
+		Description = "+50% de pièces, +30% de vitesse et tag [VIP] doré dans le chat.",
+		Order = 2,
+	},
+	AutoClicker = {
+		Id = 0,
+		Name = "Auto-Clicker",
+		Description = "Clique automatiquement 2 fois par seconde, même AFK.",
+		Order = 3,
+	},
+}
+
+-- Produits de développeur : achetables à l'infini (consommables).
+-- Les packs de pièces sont multipliés par (Renaissances + 1) pour rester utiles.
+Config.Products = {
+	SmallCoins = {
+		Id = 0,
+		Name = "Petit sac de pièces",
+		Coins = 1000,
+		Order = 1,
+	},
+	BigCoins = {
+		Id = 0,
+		Name = "Coffre de pièces",
+		Coins = 15000,
+		Order = 2,
+	},
+	HugeCoins = {
+		Id = 0,
+		Name = "Trésor légendaire",
+		Coins = 100000,
+		Order = 3,
+	},
+	Boost = {
+		Id = 0,
+		Name = "Boost x3 (15 min)",
+		BoostSeconds = 15 * 60,
+		Order = 4,
+	},
+}
+
+-- Améliorations achetables avec les pièces du jeu.
+Config.Upgrades = {
+	ClickPower = {
+		Name = "Puissance de clic",
+		Description = "+1 pièce par clic",
+		BaseCost = 15,
+		CostGrowth = 1.15,
+		Order = 1,
+	},
+	CoinValue = {
+		Name = "Pièces dorées",
+		Description = "+3 par pièce ramassée au sol",
+		BaseCost = 50,
+		CostGrowth = 1.2,
+		Order = 2,
+	},
+	WalkSpeed = {
+		Name = "Baskets rapides",
+		Description = "+1 vitesse de marche",
+		BaseCost = 100,
+		CostGrowth = 1.35,
+		MaxLevel = 20,
+		Order = 3,
+	},
+}
+
+Config.Rebirth = {
+	BaseCost = 25000, -- coût = BaseCost * (renaissances + 1) ^ 1.5
+	BonusPerRebirth = 0.5, -- +50% de gains par renaissance
+}
+
+Config.Multipliers = {
+	DoubleCoins = 2,
+	VIP = 1.5,
+	Boost = 3,
+}
+
+Config.BaseWalkSpeed = 16
+Config.VIPSpeedBonus = 1.3
+Config.ClickCooldown = 0.08 -- anti-triche : ~12 clics/s maximum
+Config.AutoClickInterval = 0.5
+
+Config.World = {
+	AreaSize = 220, -- taille de la zone de jeu (studs)
+	MaxCoins = 45, -- pièces présentes en même temps
+	RespawnDelay = 3,
+	GoldenChance = 0.06, -- chance qu'une pièce soit dorée
+	GoldenMultiplier = 10,
+}
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">Economy</string>
+          <string name="Source"><![CDATA[-- Formules de l'économie, partagées entre serveur et client
+-- (le serveur fait foi, le client ne s'en sert que pour l'affichage).
+
+local Config = require(script.Parent:WaitForChild("Config"))
+
+local Economy = {}
+
+function Economy.getUpgradeCost(upgradeId: string, level: number): number
+	local upgrade = Config.Upgrades[upgradeId]
+	return math.floor(upgrade.BaseCost * upgrade.CostGrowth ^ level)
+end
+
+function Economy.isMaxed(upgradeId: string, level: number): boolean
+	local maxLevel = Config.Upgrades[upgradeId].MaxLevel
+	return maxLevel ~= nil and level >= maxLevel
+end
+
+function Economy.getRebirthCost(rebirths: number): number
+	return math.floor(Config.Rebirth.BaseCost * (rebirths + 1) ^ 1.5)
+end
+
+-- flags = { DoubleCoins = bool, VIP = bool, Boost = bool }
+function Economy.getMultiplier(data, flags): number
+	local multiplier = 1 + data.Rebirths * Config.Rebirth.BonusPerRebirth
+	if flags.DoubleCoins then
+		multiplier *= Config.Multipliers.DoubleCoins
+	end
+	if flags.VIP then
+		multiplier *= Config.Multipliers.VIP
+	end
+	if flags.Boost then
+		multiplier *= Config.Multipliers.Boost
+	end
+	return multiplier
+end
+
+function Economy.getClickValue(data): number
+	return 1 + data.Upgrades.ClickPower
+end
+
+function Economy.getPickupValue(data): number
+	return 5 + 3 * data.Upgrades.CoinValue
+end
+
+function Economy.getWalkSpeed(data, isVIP: boolean): number
+	local speed = Config.BaseWalkSpeed + data.Upgrades.WalkSpeed
+	if isVIP then
+		speed *= Config.VIPSpeedBonus
+	end
+	return speed
+end
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx" }
+
+function Economy.formatNumber(n: number): string
+	n = math.floor(n)
+	if n < 1000 then
+		return tostring(n)
+	end
+	local value = n
+	local index = 1
+	while value >= 1000 and index < #SUFFIXES do
+		value /= 1000
+		index += 1
+	end
+	local text = string.format("%.1f", value):gsub("%.0$", "")
+	return text .. SUFFIXES[index]
+end
+
+function Economy.formatDuration(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	return string.format("%d:%02d", seconds // 60, seconds % 60)
+end
+
+return Economy
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="4">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="5">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Sauvegarde des joueurs (DataStore) : chargement avec réessais,
+-- sauvegarde automatique, à la déconnexion et à la fermeture du serveur.
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local STORE_NAME = "CoinRush_PlayerData_v1"
+local AUTOSAVE_INTERVAL = 120
+local MAX_RECEIPTS = 100 -- derniers achats Robux mémorisés (anti double-crédit)
+
+local DataService = {}
+
+local profiles = {} -- [Player] = data
+local canSave = {} -- [Player] = bool
+
+local store = nil
+do
+	local ok, err = pcall(function()
+		store = DataStoreService:GetDataStore(STORE_NAME)
+	end)
+	if not ok then
+		warn("[DataService] DataStore indisponible :", err)
+	end
+end
+
+local function defaultData()
+	return {
+		Coins = 0,
+		TotalCoins = 0,
+		Rebirths = 0,
+		Upgrades = {
+			ClickPower = 0,
+			CoinValue = 0,
+			WalkSpeed = 0,
+		},
+		BoostEndsAt = 0,
+		Receipts = {},
+	}
+end
+
+-- Ajoute les champs manquants (utile quand tu ajoutes des stats dans une mise à jour).
+local function reconcile(data)
+	for key, value in defaultData() do
+		if data[key] == nil then
+			data[key] = value
+		elseif type(value) == "table" and type(data[key]) == "table" then
+			for subKey, subValue in value do
+				if data[key][subKey] == nil then
+					data[key][subKey] = subValue
+				end
+			end
+		end
+	end
+	return data
+end
+
+local function withRetries(label: string, callback)
+	for attempt = 1, 3 do
+		local ok, result = pcall(callback)
+		if ok then
+			return true, result
+		end
+		warn(string.format("[DataService] %s échoué (essai %d/3) : %s", label, attempt, tostring(result)))
+		if attempt < 3 then
+			task.wait(2 ^ attempt)
+		end
+	end
+	return false, nil
+end
+
+local function keyFor(player: Player): string
+	return "Player_" .. player.UserId
+end
+
+function DataService.load(player: Player)
+	if not store then
+		profiles[player] = defaultData()
+		canSave[player] = false
+		return profiles[player]
+	end
+
+	local ok, stored = withRetries("Chargement de " .. player.Name, function()
+		return store:GetAsync(keyFor(player))
+	end)
+
+	if not ok then
+		if RunService:IsStudio() then
+			-- En Studio sans "Enable Studio Access to API Services" : on joue sans sauvegarde.
+			warn("[DataService] Mode Studio : données non sauvegardées pour " .. player.Name)
+			profiles[player] = defaultData()
+			canSave[player] = false
+			return profiles[player]
+		end
+		-- En ligne : on ne laisse pas jouer avec des données vides (sinon on écraserait la vraie sauvegarde).
+		player:Kick("Impossible de charger ta sauvegarde. Reviens dans une minute !")
+		return nil
+	end
+
+	if player.Parent == nil then
+		return nil -- parti pendant le chargement
+	end
+
+	profiles[player] = reconcile(type(stored) == "table" and stored or defaultData())
+	canSave[player] = true
+	return profiles[player]
+end
+
+function DataService.get(player: Player)
+	return profiles[player]
+end
+
+function DataService.waitForData(player: Player, timeout: number)
+	local deadline = os.clock() + timeout
+	while not profiles[player] and player.Parent ~= nil and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+function DataService.save(player: Player): boolean
+	local data = profiles[player]
+	if not data or not canSave[player] or not store then
+		return false
+	end
+	local ok = withRetries("Sauvegarde de " .. player.Name, function()
+		store:UpdateAsync(keyFor(player), function()
+			return data
+		end)
+	end)
+	return ok
+end
+
+function DataService.hasReceipt(data, purchaseId: string): boolean
+	return table.find(data.Receipts, purchaseId) ~= nil
+end
+
+function DataService.addReceipt(data, purchaseId: string)
+	table.insert(data.Receipts, purchaseId)
+	while #data.Receipts > MAX_RECEIPTS do
+		table.remove(data.Receipts, 1)
+	end
+end
+
+function DataService.release(player: Player)
+	DataService.save(player)
+	profiles[player] = nil
+	canSave[player] = nil
+end
+
+-- Sauvegarde automatique
+task.spawn(function()
+	while true do
+		task.wait(AUTOSAVE_INTERVAL)
+		for _, player in Players:GetPlayers() do
+			task.spawn(DataService.save, player)
+		end
+	end
+end)
+
+-- Sauvegarde de tout le monde quand le serveur s'arrête
+game:BindToClose(function()
+	local pending = 0
+	for player in profiles do
+		pending += 1
+		task.spawn(function()
+			DataService.save(player)
+			pending -= 1
+		end)
+	end
+	local deadline = os.clock() + 25
+	while pending > 0 and os.clock() < deadline do
+		task.wait(0.1)
+	end
+end)
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="7">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Point d'entrée serveur de Coin Rush.
+-- Toute la logique de gain / dépense est ici : le client ne fait qu'envoyer des demandes.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Economy = require(Shared:WaitForChild("Economy"))
+
+local DataService = require(script.Parent:WaitForChild("DataService"))
+local MonetizationService = require(script.Parent:WaitForChild("MonetizationService"))
+local World = require(script.Parent:WaitForChild("World"))
+
+-- Remotes -------------------------------------------------------------------
+
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+local function newRemote(name: string): RemoteEvent
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = name
+	remote.Parent = remotes
+	return remote
+end
+local ClickRemote = newRemote("Click")
+local BuyUpgradeRemote = newRemote("BuyUpgrade")
+local RebirthRemote = newRemote("Rebirth")
+local StateRemote = newRemote("State")
+local NotifyRemote = newRemote("Notify")
+remotes.Parent = ReplicatedStorage
+
+-- Helpers -------------------------------------------------------------------
+
+local function getFlags(player: Player, data)
+	return {
+		DoubleCoins = player:GetAttribute("DoubleCoins") == true,
+		VIP = player:GetAttribute("VIP") == true,
+		Boost = data.BoostEndsAt > os.time(),
+	}
+end
+
+local function notify(player: Player, text: string, kind: string?)
+	NotifyRemote:FireClient(player, text, kind or "info")
+end
+
+local function applyWalkSpeed(player: Player)
+	local data = DataService.get(player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if data and humanoid then
+		humanoid.WalkSpeed = Economy.getWalkSpeed(data, player:GetAttribute("VIP") == true)
+	end
+end
+
+local function pushState(player: Player)
+	local data = DataService.get(player)
+	if not data then
+		return
+	end
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats then
+		leaderstats.Coins.Value = math.floor(data.Coins)
+		leaderstats.Rebirths.Value = data.Rebirths
+	end
+	StateRemote:FireClient(player, {
+		Coins = data.Coins,
+		Rebirths = data.Rebirths,
+		Upgrades = data.Upgrades,
+		BoostEndsAt = data.BoostEndsAt,
+		Multiplier = Economy.getMultiplier(data, getFlags(player, data)),
+	})
+end
+
+local function onPlayerChanged(player: Player)
+	applyWalkSpeed(player)
+	pushState(player)
+end
+
+local function addCoins(player: Player, baseAmount: number): number
+	local data = DataService.get(player)
+	if not data then
+		return 0
+	end
+	local amount = math.max(1, math.floor(baseAmount * Economy.getMultiplier(data, getFlags(player, data))))
+	data.Coins += amount
+	data.TotalCoins += amount
+	pushState(player)
+	return amount
+end
+
+-- Joueurs -------------------------------------------------------------------
+
+local lastClick = {} -- [Player] = os.clock()
+
+local function onPlayerAdded(player: Player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Parent = leaderstats
+	local rebirths = Instance.new("IntValue")
+	rebirths.Name = "Rebirths"
+	rebirths.Parent = leaderstats
+	leaderstats.Parent = player
+
+	player.CharacterAdded:Connect(function(character)
+		character:WaitForChild("Humanoid")
+		applyWalkSpeed(player)
+	end)
+
+	local data = DataService.load(player)
+	if not data then
+		return
+	end
+
+	MonetizationService.refreshPasses(player)
+	-- Un pass acheté ailleurs (site web) ou pendant la partie : on met à jour.
+	for key in Config.GamePasses do
+		player:GetAttributeChangedSignal(key):Connect(function()
+			onPlayerChanged(player)
+		end)
+	end
+
+	onPlayerChanged(player)
+	notify(player, "Bienvenue dans Coin Rush ! Ramasse les pièces et clique pour devenir riche 💰")
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	lastClick[player] = nil
+	DataService.release(player)
+end)
+
+-- Actions des joueurs --------------------------------------------------------
+
+ClickRemote.OnServerEvent:Connect(function(player)
+	local data = DataService.get(player)
+	if not data then
+		return
+	end
+	local now = os.clock()
+	if now - (lastClick[player] or 0) < Config.ClickCooldown then
+		return -- trop rapide : autoclicker externe
+	end
+	lastClick[player] = now
+	addCoins(player, Economy.getClickValue(data))
+end)
+
+BuyUpgradeRemote.OnServerEvent:Connect(function(player, upgradeId)
+	local data = DataService.get(player)
+	if not data or type(upgradeId) ~= "string" or not Config.Upgrades[upgradeId] then
+		return
+	end
+	local level = data.Upgrades[upgradeId]
+	if Economy.isMaxed(upgradeId, level) then
+		notify(player, "Niveau maximum atteint !", "error")
+		return
+	end
+	local cost = Economy.getUpgradeCost(upgradeId, level)
+	if data.Coins < cost then
+		notify(player, "Pas assez de pièces ! Il en manque " .. Economy.formatNumber(cost - data.Coins), "error")
+		return
+	end
+	data.Coins -= cost
+	data.Upgrades[upgradeId] = level + 1
+	onPlayerChanged(player)
+end)
+
+RebirthRemote.OnServerEvent:Connect(function(player)
+	local data = DataService.get(player)
+	if not data then
+		return
+	end
+	local cost = Economy.getRebirthCost(data.Rebirths)
+	if data.Coins < cost then
+		notify(player, "Il te faut " .. Economy.formatNumber(cost) .. " pièces pour renaître.", "error")
+		return
+	end
+	data.Coins = 0
+	for upgradeId in data.Upgrades do
+		data.Upgrades[upgradeId] = 0
+	end
+	data.Rebirths += 1
+	onPlayerChanged(player)
+	notify(player, string.format("Renaissance %d ! Gains x%.1f permanents 🔥", data.Rebirths, 1 + data.Rebirths * Config.Rebirth.BonusPerRebirth), "purchase")
+	task.spawn(DataService.save, player)
+end)
+
+-- Boucles --------------------------------------------------------------------
+
+MonetizationService.init({
+	onPlayerChanged = onPlayerChanged,
+	notify = notify,
+})
+
+World.buildMap()
+World.startCoinSpawner(function(player, multiplier)
+	local data = DataService.get(player)
+	if data then
+		addCoins(player, Economy.getPickupValue(data) * multiplier)
+	end
+end)
+
+-- Auto-Clicker (Game Pass)
+task.spawn(function()
+	while true do
+		task.wait(Config.AutoClickInterval)
+		for _, player in Players:GetPlayers() do
+			local data = DataService.get(player)
+			if data and player:GetAttribute("AutoClicker") then
+				addCoins(player, Economy.getClickValue(data))
+			end
+		end
+	end
+end)
+
+-- Fin des boosts : on prévient le client pour mettre à jour le multiplicateur
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for _, player in Players:GetPlayers() do
+			local data = DataService.get(player)
+			if data then
+				local active = data.BoostEndsAt > os.time()
+				local wasActive = player:GetAttribute("BoostActive") == true
+				if wasActive ~= active then
+					player:SetAttribute("BoostActive", active)
+					pushState(player)
+					if wasActive then
+						notify(player, "Ton boost x3 est terminé.")
+					end
+				end
+			end
+		end
+	end
+end)
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Achats Robux : Game Passes (permanents) et Produits de développeur (consommables).
+-- ProcessReceipt suit la méthode recommandée par Roblox : on ne répond
+-- "PurchaseGranted" qu'une fois l'achat crédité ET sauvegardé, et chaque
+-- reçu n'est crédité qu'une seule fois.
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local DataService = require(script.Parent:WaitForChild("DataService"))
+
+local MonetizationService = {}
+
+local onPlayerChanged = function(_player: Player) end
+local notify = function(_player: Player, _text: string, _kind: string?) end
+
+local passKeyById = {}
+for key, pass in Config.GamePasses do
+	if pass.Id ~= 0 then
+		passKeyById[pass.Id] = key
+	end
+end
+
+local productKeyById = {}
+for key, product in Config.Products do
+	if product.Id ~= 0 then
+		productKeyById[product.Id] = key
+	end
+end
+
+-- Ce que chaque produit donne. Renvoie le message affiché au joueur.
+local productHandlers = {}
+
+local function grantCoins(product)
+	return function(_player, data)
+		local amount = product.Coins * (data.Rebirths + 1)
+		data.Coins += amount
+		data.TotalCoins += amount
+		return string.format("+%d pièces ! Merci pour ton soutien 💛", amount)
+	end
+end
+
+productHandlers.SmallCoins = grantCoins(Config.Products.SmallCoins)
+productHandlers.BigCoins = grantCoins(Config.Products.BigCoins)
+productHandlers.HugeCoins = grantCoins(Config.Products.HugeCoins)
+
+productHandlers.Boost = function(_player, data)
+	local now = os.time()
+	data.BoostEndsAt = math.max(now, data.BoostEndsAt) + Config.Products.Boost.BoostSeconds
+	return "Boost x3 activé ! ⚡"
+end
+
+local function processReceipt(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	if not player then
+		-- Le joueur est parti : Roblox relancera l'achat à sa prochaine connexion.
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	local data = DataService.waitForData(player, 15)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	if DataService.hasReceipt(data, receipt.PurchaseId) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+
+	local key = productKeyById[receipt.ProductId]
+	local handler = key and productHandlers[key]
+	if not handler then
+		warn("[Monetization] Produit inconnu :", receipt.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	local ok, message = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] Erreur en créditant l'achat :", message)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	DataService.addReceipt(data, receipt.PurchaseId)
+
+	onPlayerChanged(player)
+	notify(player, message, "purchase")
+
+	-- Si la sauvegarde échoue, l'achat reste crédité en mémoire (avec son reçu) et
+	-- sera sauvegardé plus tard ; Roblox le représentera, sans double crédit.
+	if DataService.save(player) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+
+function MonetizationService.refreshPasses(player: Player)
+	for key, pass in Config.GamePasses do
+		if pass.Id ~= 0 and not player:GetAttribute(key) then
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, pass.Id)
+			end)
+			if ok and owns then
+				player:SetAttribute(key, true)
+			elseif not ok then
+				warn("[Monetization] Vérification du pass échouée :", key, owns)
+			end
+		end
+	end
+end
+
+function MonetizationService.init(callbacks)
+	onPlayerChanged = callbacks.onPlayerChanged or onPlayerChanged
+	notify = callbacks.notify or notify
+
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		local key = passKeyById[passId]
+		if purchased and key then
+			player:SetAttribute(key, true)
+			onPlayerChanged(player)
+			notify(player, Config.GamePasses[key].Name .. " débloqué ! Merci 💛", "purchase")
+		end
+	end)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">World</string>
+          <string name="Source"><![CDATA[-- Construit la carte et fait apparaître les pièces à ramasser.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local World = {}
+
+local function part(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props.Shape then
+		p.Shape = props.Shape -- avant Size, sinon la taille est recalculée
+	end
+	for key, value in props do
+		if key ~= "Parent" and key ~= "Shape" then
+			p[key] = value
+		end
+	end
+	p.Parent = props.Parent
+	return p
+end
+
+local function addTree(parent, position: Vector3, rng: Random)
+	local height = rng:NextNumber(8, 14)
+	part({
+		Name = "Trunk",
+		Size = Vector3.new(2, height, 2),
+		Position = position + Vector3.new(0, height / 2, 0),
+		Color = Color3.fromRGB(110, 72, 40),
+		Material = Enum.Material.Wood,
+		Parent = parent,
+	})
+	local leaves = part({
+		Name = "Leaves",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * rng:NextNumber(8, 12),
+		Position = position + Vector3.new(0, height + 2, 0),
+		Color = Color3.fromRGB(58, 150, 70),
+		Material = Enum.Material.Grass,
+		Parent = parent,
+	})
+	leaves.CanCollide = false
+end
+
+function World.buildMap()
+	if Workspace:FindFirstChild("CoinRushMap") then
+		return
+	end
+	local size = Config.World.AreaSize
+	local map = Instance.new("Model")
+	map.Name = "CoinRushMap"
+
+	part({
+		Name = "Ground",
+		Size = Vector3.new(size + 60, 4, size + 60),
+		Position = Vector3.new(0, -1.95, 0), -- dessus à y = 0.05 (évite de clignoter avec la Baseplate par défaut)
+		Color = Color3.fromRGB(92, 184, 92),
+		Material = Enum.Material.Grass,
+		Parent = map,
+	})
+
+	-- Murs invisibles autour de la zone
+	local half = size / 2 + 30
+	for _, info in {
+		{ Vector3.new(half, 25, 0), Vector3.new(2, 50, half * 2) },
+		{ Vector3.new(-half, 25, 0), Vector3.new(2, 50, half * 2) },
+		{ Vector3.new(0, 25, half), Vector3.new(half * 2, 50, 2) },
+		{ Vector3.new(0, 25, -half), Vector3.new(half * 2, 50, 2) },
+	} do
+		part({ Name = "Wall", Position = info[1], Size = info[2], Transparency = 1, Parent = map })
+	end
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Neutral = true
+	spawn.Size = Vector3.new(14, 1, 14)
+	spawn.Position = Vector3.new(0, 0.55, 0)
+	spawn.Color = Color3.fromRGB(255, 200, 40)
+	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Duration = 0
+	spawn.Parent = map
+
+	local rng = Random.new(42)
+	for _ = 1, 30 do
+		local x = rng:NextNumber(-size / 2, size / 2)
+		local z = rng:NextNumber(-size / 2, size / 2)
+		if math.abs(x) > 20 or math.abs(z) > 20 then
+			addTree(map, Vector3.new(x, 0, z), rng)
+		end
+	end
+
+	map.Parent = Workspace
+end
+
+-- onCollect(player, multiplier) est appelé quand un joueur ramasse une pièce.
+function World.startCoinSpawner(onCollect)
+	local folder = Instance.new("Folder")
+	folder.Name = "Coins"
+	folder.Parent = Workspace
+
+	local rng = Random.new()
+	local half = Config.World.AreaSize / 2
+
+	local function spawnCoin()
+		local isGolden = rng:NextNumber() < Config.World.GoldenChance
+		local coin = part({
+			Name = isGolden and "GoldenCoin" or "Coin",
+			Shape = Enum.PartType.Cylinder,
+			Size = isGolden and Vector3.new(0.6, 5, 5) or Vector3.new(0.4, 3, 3),
+			Color = isGolden and Color3.fromRGB(255, 120, 20) or Color3.fromRGB(255, 215, 0),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			CanQuery = false,
+			CFrame = CFrame.new(rng:NextNumber(-half, half), isGolden and 3.5 or 2.5, rng:NextNumber(-half, half))
+				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0),
+		})
+
+		local connection
+		connection = coin.Touched:Connect(function(hit)
+			if coin:GetAttribute("Taken") then
+				return
+			end
+			local character = hit:FindFirstAncestorOfClass("Model")
+			local player = character and Players:GetPlayerFromCharacter(character)
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if not player or not humanoid or humanoid.Health <= 0 then
+				return
+			end
+			coin:SetAttribute("Taken", true)
+			connection:Disconnect()
+			coin:Destroy()
+			onCollect(player, isGolden and Config.World.GoldenMultiplier or 1)
+			task.delay(Config.World.RespawnDelay, spawnCoin)
+		end)
+
+		coin.Parent = folder
+	end
+
+	for _ = 1, Config.World.MaxCoins do
+		spawnCoin()
+	end
+end
+
+return World
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="10">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="11">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="12">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="13">
+          <Properties>
+            <string name="Name">ChatTags</string>
+            <string name="Source"><![CDATA[-- Tag [VIP] doré devant le nom des joueurs VIP dans le chat (TextChatService).
+
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+
+TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+	local properties = Instance.new("TextChatMessageProperties")
+	local source = message.TextSource
+	local sender = source and Players:GetPlayerByUserId(source.UserId)
+	if sender and sender:GetAttribute("VIP") then
+		properties.PrefixText = '<font color="#FFD700">[VIP]</font> ' .. message.PrefixText
+	end
+	return properties
+end
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="LocalScript" referent="14">
+          <Properties>
+            <string name="Name">CoinSpin</string>
+            <string name="Source"><![CDATA[-- Fait tourner et flotter les pièces (uniquement visuel, côté client).
+
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local coinsFolder = Workspace:WaitForChild("Coins")
+local baseCFrames = {} -- [Part] = CFrame d'origine
+
+coinsFolder.ChildAdded:Connect(function(coin)
+	if coin:IsA("BasePart") then
+		baseCFrames[coin] = coin.CFrame
+	end
+end)
+coinsFolder.ChildRemoved:Connect(function(coin)
+	baseCFrames[coin] = nil
+end)
+for _, coin in coinsFolder:GetChildren() do
+	if coin:IsA("BasePart") then
+		baseCFrames[coin] = coin.CFrame
+	end
+end
+
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	for coin, base in baseCFrames do
+		coin.CFrame = base * CFrame.new(0, math.sin(t * 2 + base.X) * 0.4, 0) * CFrame.Angles(0, t * 2, 0)
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="LocalScript" referent="15">
+          <Properties>
+            <string name="Name">UI</string>
+            <string name="Source"><![CDATA[-- Interface du joueur : compteur, bouton de clic, améliorations, boutique Robux, renaissance.
+-- Tout est construit en code : rien à dessiner dans Studio.
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Economy = require(Shared:WaitForChild("Economy"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local COLORS = {
+	Panel = Color3.fromRGB(30, 32, 48),
+	PanelLight = Color3.fromRGB(46, 49, 72),
+	Text = Color3.fromRGB(255, 255, 255),
+	Muted = Color3.fromRGB(185, 190, 215),
+	Gold = Color3.fromRGB(255, 200, 40),
+	Green = Color3.fromRGB(60, 200, 110),
+	Red = Color3.fromRGB(230, 70, 80),
+	Blue = Color3.fromRGB(70, 140, 255),
+	Robux = Color3.fromRGB(0, 176, 111),
+	Purple = Color3.fromRGB(160, 90, 255),
+	Disabled = Color3.fromRGB(90, 92, 110),
+}
+
+local state = nil -- dernier état reçu du serveur
+local refreshers = {} -- fonctions appelées à chaque nouvel état
+
+-- Helpers UI -----------------------------------------------------------------
+
+local function create(className: string, props, children)
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			inst[key] = value
+		end
+	end
+	for _, child in children or {} do
+		child.Parent = inst
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+local function corner(radius: number?)
+	return create("UICorner", { CornerRadius = UDim.new(0, radius or 12) })
+end
+
+local function stroke(color: Color3, thickness: number?)
+	return create("UIStroke", {
+		Color = color,
+		Thickness = thickness or 2,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+local function label(props)
+	props.BackgroundTransparency = 1
+	props.Font = props.Font or Enum.Font.GothamBold
+	props.TextColor3 = props.TextColor3 or COLORS.Text
+	props.TextScaled = props.TextScaled ~= false
+	local maxText = props.MaxText or 28
+	props.MaxText = nil
+	return create("TextLabel", props, { create("UITextSizeConstraint", { MaxTextSize = maxText }) })
+end
+
+local function button(props)
+	props.Font = props.Font or Enum.Font.GothamBlack
+	props.TextColor3 = props.TextColor3 or COLORS.Text
+	props.TextScaled = true
+	props.AutoButtonColor = true
+	local maxText = props.MaxText or 22
+	props.MaxText = nil
+	return create("TextButton", props, {
+		corner(10),
+		create("UITextSizeConstraint", { MaxTextSize = maxText }),
+		create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+	})
+end
+
+local function pop(guiObject: GuiObject)
+	local scale = guiObject:FindFirstChildOfClass("UIScale") or create("UIScale", { Parent = guiObject })
+	scale.Scale = 0.9
+	TweenService:Create(scale, TweenInfo.new(0.15, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+end
+
+-- Écran principal --------------------------------------------------------------
+
+local gui = create("ScreenGui", {
+	Name = "CoinRushUI",
+	ResetOnSpawn = false,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	Parent = player:WaitForChild("PlayerGui"),
+})
+
+-- Compteur de pièces
+local topBar = create("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 8),
+	Size = UDim2.new(0, 300, 0, 74),
+	BackgroundColor3 = COLORS.Panel,
+	BackgroundTransparency = 0.1,
+	Parent = gui,
+}, { corner(16), stroke(COLORS.Gold, 3) })
+
+local coinsLabel = label({
+	Text = "💰 0",
+	Size = UDim2.new(1, -16, 0.6, 0),
+	Position = UDim2.new(0, 8, 0, 4),
+	TextColor3 = COLORS.Gold,
+	Font = Enum.Font.GothamBlack,
+	MaxText = 36,
+	Parent = topBar,
+})
+
+local infoLabel = label({
+	Text = "Gains x1",
+	Size = UDim2.new(1, -16, 0.32, 0),
+	Position = UDim2.new(0, 8, 0.64, 0),
+	TextColor3 = COLORS.Muted,
+	Font = Enum.Font.GothamMedium,
+	MaxText = 18,
+	Parent = topBar,
+})
+
+-- Bouton de clic
+local clickButton = button({
+	Text = "CLIQUE !",
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -24),
+	Size = UDim2.new(0, 230, 0, 76),
+	BackgroundColor3 = COLORS.Gold,
+	TextColor3 = Color3.fromRGB(60, 40, 0),
+	MaxText = 32,
+	Parent = gui,
+})
+stroke(Color3.fromRGB(150, 100, 0), 3).Parent = clickButton
+
+-- Notifications
+local toastHolder = create("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 92),
+	Size = UDim2.new(0, 420, 0, 200),
+	BackgroundTransparency = 1,
+	Parent = gui,
+}, {
+	create("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}),
+})
+
+local function toast(text: string, kind: string?)
+	local color = kind == "error" and COLORS.Red or kind == "purchase" and COLORS.Green or COLORS.Blue
+	local frame = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = COLORS.Panel,
+		Parent = toastHolder,
+	}, { corner(10), stroke(color, 2) })
+	label({
+		Text = text,
+		Size = UDim2.new(1, -16, 1, -8),
+		Position = UDim2.new(0, 8, 0, 4),
+		Font = Enum.Font.GothamMedium,
+		MaxText = 18,
+		Parent = frame,
+	})
+	pop(frame)
+	task.delay(3.5, function()
+		frame:Destroy()
+	end)
+end
+
+-- Texte "+X" qui s'envole au-dessus du bouton
+local function floatingText(text: string)
+	local rng = Random.new()
+	local floating = label({
+		Text = text,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, rng:NextInteger(-90, 90), 1, -110),
+		Size = UDim2.new(0, 140, 0, 36),
+		TextColor3 = COLORS.Gold,
+		Font = Enum.Font.GothamBlack,
+		MaxText = 28,
+		Parent = gui,
+	})
+	create("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 2, Parent = floating })
+	TweenService:Create(floating, TweenInfo.new(0.8), {
+		Position = floating.Position - UDim2.fromOffset(0, 80),
+		TextTransparency = 1,
+	}):Play()
+	task.delay(0.8, function()
+		floating:Destroy()
+	end)
+end
+
+-- Panneaux ---------------------------------------------------------------------
+
+local panels = {}
+
+local function makePanel(title: string, accent: Color3)
+	local panel = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.9, 0.7),
+		BackgroundColor3 = COLORS.Panel,
+		Visible = false,
+		ZIndex = 5,
+		Parent = gui,
+	}, {
+		corner(18),
+		stroke(accent, 3),
+		create("UISizeConstraint", { MaxSize = Vector2.new(520, 440) }),
+	})
+	label({
+		Text = title,
+		Size = UDim2.new(1, -70, 0, 44),
+		Position = UDim2.new(0, 16, 0, 8),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Font = Enum.Font.GothamBlack,
+		MaxText = 30,
+		ZIndex = 6,
+		Parent = panel,
+	})
+	local close = button({
+		Text = "X",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 10),
+		Size = UDim2.new(0, 40, 0, 40),
+		BackgroundColor3 = COLORS.Red,
+		ZIndex = 6,
+		Parent = panel,
+	})
+	close.Activated:Connect(function()
+		panel.Visible = false
+	end)
+	local list = create("ScrollingFrame", {
+		Position = UDim2.new(0, 10, 0, 60),
+		Size = UDim2.new(1, -20, 1, -70),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 6,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 6,
+		Parent = panel,
+	}, {
+		create("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		create("UIPadding", { PaddingRight = UDim.new(0, 8) }),
+	})
+	table.insert(panels, panel)
+	return panel, list
+end
+
+local function openPanel(panel)
+	local wasVisible = panel.Visible
+	for _, other in panels do
+		other.Visible = false
+	end
+	panel.Visible = not wasVisible
+	if panel.Visible then
+		pop(panel)
+	end
+end
+
+local function makeRow(list, order: number, title: string, accent: Color3)
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 76),
+		BackgroundColor3 = COLORS.PanelLight,
+		LayoutOrder = order,
+		ZIndex = 7,
+		Parent = list,
+	}, { corner(12) })
+	label({
+		Text = title,
+		Size = UDim2.new(1, -170, 0, 28),
+		Position = UDim2.new(0, 12, 0, 8),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = accent,
+		MaxText = 22,
+		ZIndex = 8,
+		Parent = row,
+	})
+	local description = label({
+		Text = "",
+		Size = UDim2.new(1, -170, 0, 32),
+		Position = UDim2.new(0, 12, 0, 38),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = COLORS.Muted,
+		Font = Enum.Font.GothamMedium,
+		TextWrapped = true,
+		MaxText = 15,
+		ZIndex = 8,
+		Parent = row,
+	})
+	local action = button({
+		Text = "...",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0, 145, 0, 50),
+		BackgroundColor3 = accent,
+		MaxText = 18,
+		ZIndex = 8,
+		Parent = row,
+	})
+	return row, description, action
+end
+
+local function sortedKeys(dict)
+	local keys = {}
+	for key in dict do
+		table.insert(keys, key)
+	end
+	table.sort(keys, function(a, b)
+		return dict[a].Order < dict[b].Order
+	end)
+	return keys
+end
+
+-- Panneau Améliorations
+local upgradesPanel, upgradesList = makePanel("⬆ Améliorations", COLORS.Blue)
+for index, upgradeId in sortedKeys(Config.Upgrades) do
+	local upgrade = Config.Upgrades[upgradeId]
+	local _, description, action = makeRow(upgradesList, index, upgrade.Name, COLORS.Blue)
+	action.Activated:Connect(function()
+		Remotes.BuyUpgrade:FireServer(upgradeId)
+		pop(action)
+	end)
+	table.insert(refreshers, function()
+		local level = state.Upgrades[upgradeId]
+		description.Text = string.format("%s — niveau %d", upgrade.Description, level)
+		if Economy.isMaxed(upgradeId, level) then
+			action.Text = "MAX"
+			action.BackgroundColor3 = COLORS.Disabled
+		else
+			local cost = Economy.getUpgradeCost(upgradeId, level)
+			action.Text = "💰 " .. Economy.formatNumber(cost)
+			action.BackgroundColor3 = state.Coins >= cost and COLORS.Green or COLORS.Disabled
+		end
+	end)
+end
+
+-- Panneau Boutique (Robux)
+local shopPanel, shopList = makePanel("🛒 Boutique", COLORS.Robux)
+
+local function fetchPrice(id: number, infoType: Enum.InfoType, callback)
+	task.spawn(function()
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(id, infoType)
+		end)
+		if ok and info and info.PriceInRobux then
+			callback(info.PriceInRobux)
+		end
+	end)
+end
+
+local order = 0
+for _, key in sortedKeys(Config.GamePasses) do
+	order += 1
+	local pass = Config.GamePasses[key]
+	local _, description, action = makeRow(shopList, order, "⭐ " .. pass.Name, COLORS.Purple)
+	description.Text = pass.Description
+	local price = nil
+
+	local function refresh()
+		if pass.Id == 0 then
+			action.Text = "Bientôt"
+			action.BackgroundColor3 = COLORS.Disabled
+		elseif player:GetAttribute(key) then
+			action.Text = "Possédé ✔"
+			action.BackgroundColor3 = COLORS.Disabled
+		else
+			action.Text = price and ("R$ " .. price) or "Acheter"
+			action.BackgroundColor3 = COLORS.Robux
+		end
+	end
+	refresh()
+	player:GetAttributeChangedSignal(key):Connect(refresh)
+	if pass.Id ~= 0 then
+		fetchPrice(pass.Id, Enum.InfoType.GamePass, function(robux)
+			price = robux
+			refresh()
+		end)
+	end
+
+	action.Activated:Connect(function()
+		if pass.Id ~= 0 and not player:GetAttribute(key) then
+			MarketplaceService:PromptGamePassPurchase(player, pass.Id)
+		end
+	end)
+end
+
+for _, key in sortedKeys(Config.Products) do
+	order += 1
+	local product = Config.Products[key]
+	local _, description, action = makeRow(shopList, order, "💎 " .. product.Name, COLORS.Gold)
+	action.TextColor3 = Color3.fromRGB(60, 40, 0)
+
+	if product.Coins then
+		table.insert(refreshers, function()
+			description.Text = "+" .. Economy.formatNumber(product.Coins * (state.Rebirths + 1)) .. " pièces (augmente avec tes renaissances)"
+		end)
+	else
+		description.Text = "Tous tes gains x3 pendant 15 minutes. Cumulable !"
+	end
+
+	if product.Id == 0 then
+		action.Text = "Bientôt"
+		action.BackgroundColor3 = COLORS.Disabled
+	else
+		action.Text = "Acheter"
+		fetchPrice(product.Id, Enum.InfoType.Product, function(robux)
+			action.Text = "R$ " .. robux
+		end)
+		action.Activated:Connect(function()
+			MarketplaceService:PromptProductPurchase(player, product.Id)
+		end)
+	end
+end
+
+-- Panneau Renaissance
+local rebirthPanel, rebirthList = makePanel("♻ Renaissance", COLORS.Purple)
+do
+	local _, description, action = makeRow(rebirthList, 1, "Renaître", COLORS.Purple)
+	action.Activated:Connect(function()
+		Remotes.Rebirth:FireServer()
+		pop(action)
+	end)
+	table.insert(refreshers, function()
+		local cost = Economy.getRebirthCost(state.Rebirths)
+		local nextBonus = 1 + (state.Rebirths + 1) * Config.Rebirth.BonusPerRebirth
+		description.Text = string.format("Remet pièces et améliorations à zéro. Gains x%.1f pour toujours.", nextBonus)
+		action.Text = "💰 " .. Economy.formatNumber(cost)
+		action.BackgroundColor3 = state.Coins >= cost and COLORS.Green or COLORS.Disabled
+	end)
+end
+
+-- Menu de gauche
+local menu = create("Frame", {
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 10, 0.5, 0),
+	Size = UDim2.new(0, 170, 0, 190),
+	BackgroundTransparency = 1,
+	Parent = gui,
+}, {
+	create("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
+})
+
+for index, info in {
+	{ "⬆ Améliorations", COLORS.Blue, upgradesPanel },
+	{ "🛒 Boutique", COLORS.Robux, shopPanel },
+	{ "♻ Renaissance", COLORS.Purple, rebirthPanel },
+} do
+	local menuButton = button({
+		Text = info[1],
+		Size = UDim2.new(1, 0, 0, 56),
+		BackgroundColor3 = info[2],
+		LayoutOrder = index,
+		Parent = menu,
+	})
+	stroke(Color3.new(0, 0, 0), 2).Parent = menuButton
+	menuButton.Activated:Connect(function()
+		openPanel(info[3])
+	end)
+end
+
+-- Réseau ---------------------------------------------------------------------------
+
+local function refreshAll()
+	if not state then
+		return
+	end
+	coinsLabel.Text = "💰 " .. Economy.formatNumber(state.Coins)
+	clickButton.Text = "CLIQUE !  +" .. Economy.formatNumber(Economy.getClickValue(state) * state.Multiplier)
+	for _, refresher in refreshers do
+		refresher()
+	end
+end
+
+Remotes.State.OnClientEvent:Connect(function(newState)
+	state = newState
+	refreshAll()
+end)
+
+Remotes.Notify.OnClientEvent:Connect(toast)
+
+local lastClick = 0
+clickButton.Activated:Connect(function()
+	local now = os.clock()
+	if now - lastClick < Config.ClickCooldown then
+		return
+	end
+	lastClick = now
+	Remotes.Click:FireServer()
+	pop(clickButton)
+	if state then
+		floatingText("+" .. Economy.formatNumber(Economy.getClickValue(state) * state.Multiplier))
+	end
+end)
+
+-- Ligne d'info : multiplicateur + temps de boost restant
+task.spawn(function()
+	while true do
+		if state then
+			local parts = { string.format("Gains x%.1f", state.Multiplier) }
+			local remaining = state.BoostEndsAt - Workspace:GetServerTimeNow()
+			if remaining > 0 then
+				table.insert(parts, "⚡ Boost " .. Economy.formatDuration(remaining))
+			end
+			if player:GetAttribute("AutoClicker") then
+				table.insert(parts, "🤖 Auto")
+			end
+			infoLabel.Text = table.concat(parts, "  •  ")
+		end
+		task.wait(0.5)
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
