@@ -1,0 +1,403 @@
+<title>École Jeanne d'Arc</title>
+<meta name="description" content="Proposition visuelle pour le site de l'école Jeanne d'Arc, Saint-Jean-en-Royans">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600;700&family=Shantell+Sans:wght@500&display=swap">
+<style>
+/* Mise en page : une école au pied des falaises du Vercors — paysage en en-tête, infos pratiques en bandeau "emploi du temps", puis classes par cycle, agenda et contact. */
+:root {
+  --paper: #F6F8F3;
+  --surface: #FFFFFF;
+  --ink: #1E2B36;
+  --muted: #56656C;
+  --line: #DCE2DA;
+  --forest: #2D5C4E;
+  --forest-soft: #E3EEE8;
+  --sun: #F2B33A;
+  --sun-ink: #3A2A05;
+  --sky: #DCEBF1;
+  --cliff: #CFC7B3;
+  --cliff-2: #B7AE97;
+  --hill: #8FB39B;
+  --font-display: "Young Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-hand: "Shantell Sans", "Comic Sans MS", cursive;
+  --r: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #131B20; --surface: #1A242B; --ink: #E7EDEA; --muted: #A2B0B3; --line: #2B3840;
+    --forest: #79BFA6; --forest-soft: #1F3530; --sun: #F4C25B; --sun-ink: #2B1F04;
+    --sky: #1B2B34; --cliff: #3B4245; --cliff-2: #4A5254; --hill: #2F4A3F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #131B20; --surface: #1A242B; --ink: #E7EDEA; --muted: #A2B0B3; --line: #2B3840;
+  --forest: #79BFA6; --forest-soft: #1F3530; --sun: #F4C25B; --sun-ink: #2B1F04;
+  --sky: #1B2B34; --cliff: #3B4245; --cliff-2: #4A5254; --hill: #2F4A3F; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.6; }
+a { color: var(--forest); }
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; line-height: 1.15; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+.eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--forest); }
+.hand { font-family: var(--font-hand); }
+
+/* Bandeau de proposition */
+.proposal { background: var(--ink); color: var(--paper); font-size: 13px; text-align: center; padding: 8px 16px; }
+
+/* En-tête */
+header.site { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
+.brand svg { flex: none; }
+.brand b { font-family: var(--font-display); font-weight: 400; font-size: 20px; display: block; line-height: 1.1; }
+.brand small { color: var(--muted); font-size: 13px; }
+nav.main { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.main a { text-decoration: none; color: var(--ink); font-weight: 600; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
+nav.main a:hover { background: var(--forest-soft); }
+nav.main a.cta { background: var(--forest); color: var(--paper); }
+
+/* Hero */
+.hero { background: var(--sky); position: relative; overflow: hidden; }
+.hero .wrap { display: grid; grid-template-columns: 1.05fr 1fr; gap: 32px; align-items: center; padding-block: 56px 0; }
+.hero-text { padding-bottom: 72px; min-width: 0; }
+.hero h1 { font-size: clamp(36px, 5.4vw, 60px); margin-top: 12px; }
+.hero h1 em { font-style: normal; color: var(--forest); }
+.hero p.lead { margin-top: 18px; font-size: 19px; color: var(--muted); max-width: 34ch; }
+.hero .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font: 600 16px var(--font-body); padding: 12px 20px; border-radius: 999px; text-decoration: none; border: 2px solid transparent; cursor: pointer; }
+.btn.primary { background: var(--sun); color: var(--sun-ink); }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.ghost { border-color: var(--ink); color: var(--ink); background: transparent; }
+.hero-art { align-self: end; min-width: 0; }
+.hero-art svg { display: block; width: 100%; height: auto; }
+.note { position: absolute; font-size: 15px; color: var(--ink); transform: rotate(-4deg); }
+
+/* Infos pratiques en emploi du temps */
+.today { background: var(--surface); border-block: 1px solid var(--line); }
+.today .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+.today .cell { padding: 22px 20px; border-left: 1px solid var(--line); min-width: 0; }
+.today .cell:first-child { border-left: 0; }
+.today .k { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.today .v { font-family: var(--font-display); font-size: 24px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.today .s { font-size: 14px; color: var(--muted); }
+
+section.block { padding-block: 80px; }
+.head { display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; margin-bottom: 36px; }
+.head h2 { font-size: clamp(30px, 3.6vw, 42px); margin-top: 8px; }
+.head p { color: var(--muted); max-width: 46ch; }
+
+/* Cycles */
+.cycles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.cycle { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 26px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cycle .tag { align-self: flex-start; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--forest-soft); color: var(--forest); }
+.cycle h3 { font-size: 26px; }
+.cycle .levels { display: flex; gap: 6px; flex-wrap: wrap; }
+.cycle .levels span { font-weight: 700; font-size: 14px; border: 1.5px solid var(--ink); border-radius: 6px; padding: 2px 8px; }
+.cycle p { color: var(--muted); font-size: 16px; }
+.cycle .ages { margin-top: auto; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 14px; color: var(--muted); }
+
+/* Vie de l'école */
+.life { background: var(--forest); color: var(--paper); }
+.life .eyebrow { color: var(--sun); }
+.life .head p { color: color-mix(in srgb, var(--paper) 78%, transparent); }
+.services { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid color-mix(in srgb, var(--paper) 25%, transparent); }
+.service { padding: 24px 20px 8px 0; min-width: 0; }
+.service + .service { padding-left: 20px; border-left: 1px solid color-mix(in srgb, var(--paper) 25%, transparent); }
+.service h3 { font-size: 22px; }
+.service .time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sun); font-size: 15px; margin-top: 6px; }
+.service p { margin-top: 8px; font-size: 15px; color: color-mix(in srgb, var(--paper) 82%, transparent); }
+:root[data-theme="dark"] .life, .life { --paper-on: var(--paper); }
+
+/* Actus + agenda */
+.news-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 32px; }
+.news { display: grid; gap: 20px; min-width: 0; }
+.article { display: grid; grid-template-columns: 160px 1fr; gap: 20px; align-items: start; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.thumb { aspect-ratio: 4/3; border-radius: 10px; max-width: 100%; }
+.thumb.a { background: linear-gradient(160deg, var(--sky) 0 55%, var(--hill) 55%); }
+.thumb.b { background: radial-gradient(circle at 70% 35%, var(--sun) 0 18%, transparent 19%), linear-gradient(var(--forest-soft), var(--forest-soft)); }
+.thumb.c { background: repeating-linear-gradient(-45deg, var(--cliff) 0 10px, var(--cliff-2) 10px 20px); }
+.article .meta { font-size: 13px; color: var(--muted); font-weight: 600; }
+.article h3 { font-size: 22px; margin-top: 4px; }
+.article p { margin-top: 6px; font-size: 15px; color: var(--muted); }
+.agenda { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; align-self: start; min-width: 0; }
+.agenda h3 { font-size: 22px; margin-bottom: 12px; }
+.agenda ol { list-style: none; margin: 0; padding: 0; }
+.agenda li { display: grid; grid-template-columns: 56px 1fr; gap: 14px; padding-block: 12px; border-top: 1px solid var(--line); align-items: center; }
+.date { text-align: center; border-radius: 8px; background: var(--sun); color: var(--sun-ink); padding: 4px 0; line-height: 1.1; }
+.date b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+.date small { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.agenda li span { font-size: 15px; }
+.agenda li span em { display: block; font-style: normal; color: var(--muted); font-size: 13px; }
+
+/* Contact */
+.contact { background: var(--surface); border-top: 1px solid var(--line); }
+.contact-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; }
+.coords { display: grid; gap: 18px; align-content: start; min-width: 0; }
+.coord { display: grid; gap: 2px; }
+.coord .k { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.coord .v { font-size: 18px; font-weight: 600; user-select: all; word-break: break-word; }
+.copy { font: 600 13px var(--font-body); background: var(--forest-soft); color: var(--forest); border: 0; border-radius: 999px; padding: 4px 12px; cursor: pointer; justify-self: start; margin-top: 4px; }
+.mapcard { border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); text-decoration: none; color: var(--ink); display: block; }
+.mapcard svg { display: block; width: 100%; height: auto; }
+.mapcard div { padding: 10px 14px; font-size: 14px; font-weight: 600; }
+form.msg { display: grid; gap: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 26px; min-width: 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; min-width: 0; }
+input, textarea, select { font: 16px var(--font-body); color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; width: 100%; }
+textarea { min-height: 120px; resize: vertical; }
+.sent { background: var(--forest-soft); color: var(--forest); border-radius: 10px; padding: 12px 14px; font-weight: 600; font-size: 15px; }
+
+footer { background: var(--ink); color: var(--paper); padding-block: 36px; font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+footer a { color: var(--paper); }
+
+@media (max-width: 900px) {
+  .hero .wrap { grid-template-columns: 1fr; padding-top: 40px; }
+  .hero-text { padding-bottom: 0; }
+  .today .wrap { grid-template-columns: 1fr 1fr; }
+  .today .cell:nth-child(3) { border-left: 0; }
+  .today .cell:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .cycles, .news-grid, .contact-grid { grid-template-columns: 1fr; }
+  .services { grid-template-columns: 1fr 1fr; }
+  .service:nth-child(3) { padding-left: 0; border-left: 0; }
+  .note { display: none; }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  nav.main { width: 100%; }
+  nav.main a { padding: 6px 10px; font-size: 14px; }
+  .today .wrap, .services, .row2 { grid-template-columns: 1fr; }
+  .today .cell { border-left: 0; border-top: 1px solid var(--line); }
+  .today .cell:first-child { border-top: 0; }
+  .service, .service + .service { padding-left: 0; border-left: 0; }
+  .article { grid-template-columns: 1fr; }
+  .thumb { width: 100%; }
+  section.block { padding-block: 56px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sunpath { animation: rise 1.6s ease-out both; }
+  @keyframes rise { from { transform: translateY(18px); } to { transform: none; } }
+}
+</style>
+
+<div class="proposal">Maquette de proposition · les actualités, effectifs et photos sont des exemples à remplacer</div>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="#accueil" aria-label="École Jeanne d'Arc, accueil">
+      <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+        <rect width="44" height="44" rx="12" fill="var(--forest)"/>
+        <path d="M6 32 L15 18 L20 24 L27 12 L38 32 Z" fill="var(--paper)" opacity=".9"/>
+        <circle cx="32" cy="12" r="4" fill="var(--sun)"/>
+      </svg>
+      <span><b>École Jeanne d'Arc</b><small>Saint-Jean-en-Royans · Maternelle &amp; élémentaire</small></span>
+    </a>
+    <nav class="main" aria-label="Navigation principale">
+      <a href="#classes">Nos classes</a>
+      <a href="#vie">Vie de l'école</a>
+      <a href="#actus">Actualités</a>
+      <a href="#contact">Contact</a>
+      <a class="cta" href="#contact">Inscriptions</a>
+    </nav>
+  </div>
+</header>
+
+<main id="accueil">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-text">
+        <span class="eyebrow">École privée catholique sous contrat</span>
+        <h1>Grandir et apprendre <em>au pied du Vercors</em></h1>
+        <p class="lead">Une école à taille humaine, de la petite section au CM2, où chaque enfant est connu par son prénom.</p>
+        <div class="actions">
+          <a class="btn primary" href="#contact">Inscrire mon enfant</a>
+          <a class="btn ghost" href="#classes">Découvrir l'école</a>
+        </div>
+      </div>
+      <div class="hero-art">
+        <svg viewBox="0 0 560 360" role="img" aria-label="Illustration : l'école devant les falaises du Vercors">
+          <g class="sunpath"><circle cx="440" cy="80" r="34" fill="var(--sun)"/></g>
+          <path d="M0 210 L40 150 L70 120 L110 112 L150 92 L210 88 L250 70 L300 76 L350 60 L410 72 L460 66 L520 90 L560 100 L560 360 L0 360 Z" fill="var(--cliff)"/>
+          <path d="M0 210 L40 150 L70 120 L110 112 L150 92 L210 88 L250 70 L300 76 L350 60 L410 72 L460 66 L520 90 L560 100 L560 128 L500 118 L430 104 L360 100 L300 108 L230 116 L160 126 L90 150 L30 200 Z" fill="var(--cliff-2)" opacity=".6"/>
+          <path d="M0 260 C90 220 180 236 280 228 C380 220 470 236 560 222 L560 360 L0 360 Z" fill="var(--hill)"/>
+          <path d="M0 300 C120 280 240 296 360 286 C440 280 500 290 560 284 L560 360 L0 360 Z" fill="var(--forest)"/>
+          <!-- école -->
+          <g transform="translate(200 214)">
+            <rect x="0" y="40" width="150" height="80" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/>
+            <path d="M-12 44 L75 0 L162 44 Z" fill="var(--sun)" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="75" cy="26" r="9" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/>
+            <rect x="62" y="80" width="26" height="40" fill="var(--forest)" stroke="var(--ink)" stroke-width="3"/>
+            <rect x="16" y="60" width="28" height="24" fill="var(--sky)" stroke="var(--ink)" stroke-width="3"/>
+            <rect x="106" y="60" width="28" height="24" fill="var(--sky)" stroke="var(--ink)" stroke-width="3"/>
+          </g>
+          <!-- noyers -->
+          <g fill="var(--forest)" stroke="var(--ink)" stroke-width="3">
+            <circle cx="120" cy="262" r="30"/><circle cx="430" cy="258" r="34"/>
+          </g>
+          <g stroke="var(--ink)" stroke-width="4"><line x1="120" y1="290" x2="120" y2="320"/><line x1="430" y1="290" x2="430" y2="322"/></g>
+        </svg>
+      </div>
+    </div>
+    <span class="note hand" style="right:6%; top:26px;">Les falaises du Royans, vues de la cour !</span>
+  </section>
+
+  <section class="today" aria-label="Infos pratiques">
+    <div class="wrap">
+      <div class="cell"><div class="k">Matin</div><div class="v">8h35 – 11h45</div><div class="s">Accueil dès 8h25</div></div>
+      <div class="cell"><div class="k">Après-midi</div><div class="v">13h25 – 16h45</div><div class="s">Lundi, mardi, jeudi, vendredi</div></div>
+      <div class="cell"><div class="k">Téléphone</div><div class="v">04 75 47 71 04</div><div class="s">Secrétariat</div></div>
+      <div class="cell"><div class="k">Adresse</div><div class="v">25 rue Jules Nadi</div><div class="s">26190 Saint-Jean-en-Royans</div></div>
+    </div>
+  </section>
+
+  <section class="block" id="classes">
+    <div class="wrap">
+      <div class="head">
+        <div><span class="eyebrow">Nos classes</span><h2>De 2 ans et demi à 11 ans, trois cycles</h2></div>
+        <p>Des classes à plusieurs niveaux, où les grands aident les petits et où chacun avance à son rythme.</p>
+      </div>
+      <div class="cycles">
+        <article class="cycle">
+          <span class="tag">Cycle 1</span>
+          <h3>Maternelle</h3>
+          <div class="levels"><span>TPS</span><span>PS</span><span>MS</span><span>GS</span></div>
+          <p>Découvrir le langage, les formes et les nombres, apprendre à vivre ensemble. Sieste et coin calme pour les plus jeunes.</p>
+          <div class="ages">À partir de 2 ans et demi · exemple : 24 élèves</div>
+        </article>
+        <article class="cycle">
+          <span class="tag">Cycle 2</span>
+          <h3>Apprentissages fondamentaux</h3>
+          <div class="levels"><span>CP</span><span>CE1</span><span>CE2</span></div>
+          <p>Lire, écrire, compter. Sorties nature dans le Royans et premiers projets de classe.</p>
+          <div class="ages">6 – 8 ans · exemple : 26 élèves</div>
+        </article>
+        <article class="cycle">
+          <span class="tag">Cycle 3</span>
+          <h3>Consolidation</h3>
+          <div class="levels"><span>CM1</span><span>CM2</span></div>
+          <p>Gagner en autonomie et préparer l'entrée au collège. Classe découverte et anglais chaque semaine.</p>
+          <div class="ages">9 – 11 ans · exemple : 22 élèves</div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block life" id="vie">
+    <div class="wrap">
+      <div class="head">
+        <div><span class="eyebrow">Vie de l'école</span><h2>Avant, pendant et après la classe</h2></div>
+        <p>Les services proposés aux familles. Horaires donnés à titre d'exemple, à confirmer par l'école.</p>
+      </div>
+      <div class="services">
+        <div class="service"><h3>Garderie</h3><div class="time">7h30 – 8h25 · 16h45 – 18h00</div><p>Accueil du matin et du soir, goûter fourni par les familles.</p></div>
+        <div class="service"><h3>Cantine</h3><div class="time">11h45 – 13h25</div><p>Repas préparés sur place, menus affichés chaque semaine.</p></div>
+        <div class="service"><h3>APEL</h3><div class="time">Association des parents</div><p>Kermesse, marché de Noël et soutien aux sorties scolaires.</p></div>
+        <div class="service"><h3>Pastorale</h3><div class="time">Projet éducatif</div><p>Temps d'éveil à la foi, ouverts à toutes les familles.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="actus">
+    <div class="wrap">
+      <div class="head">
+        <div><span class="eyebrow">Actualités</span><h2>Ce qui se passe à l'école</h2></div>
+        <a class="btn ghost" href="#actus">Toutes les actualités</a>
+      </div>
+      <div class="news-grid">
+        <div class="news">
+          <article class="article">
+            <div class="thumb a" role="img" aria-label="Photo d'exemple"></div>
+            <div><div class="meta">Exemple · 26 septembre</div><h3>Sortie au bord de la Bourne pour les CE</h3><p>Observation de la rivière et des oiseaux, pique-nique et retour en chansons.</p></div>
+          </article>
+          <article class="article">
+            <div class="thumb b" role="img" aria-label="Photo d'exemple"></div>
+            <div><div class="meta">Exemple · 18 septembre</div><h3>Les maternelles ramassent les noix</h3><p>Une matinée dans le verger voisin pour découvrir la noix de Grenoble.</p></div>
+          </article>
+          <article class="article">
+            <div class="thumb c" role="img" aria-label="Photo d'exemple"></div>
+            <div><div class="meta">Exemple · 2 septembre</div><h3>Une belle rentrée pour 72 élèves</h3><p>Bienvenue aux nouvelles familles et à notre nouvelle enseignante de CP.</p></div>
+          </article>
+        </div>
+        <aside class="agenda" aria-label="Agenda">
+          <h3>Agenda</h3>
+          <ol>
+            <li><div class="date"><b>10</b><small>oct.</small></div><span>Réunion de rentrée des parents<em>18h00 · salle polyvalente</em></span></li>
+            <li><div class="date"><b>17</b><small>oct.</small></div><span>Photo de classe<em>Toute la journée</em></span></li>
+            <li><div class="date"><b>18</b><small>oct.</small></div><span>Début des vacances de la Toussaint<em>Après la classe</em></span></li>
+            <li><div class="date"><b>12</b><small>déc.</small></div><span>Marché de Noël de l'APEL<em>16h45 · cour de l'école</em></span></li>
+          </ol>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="block contact" id="contact">
+    <div class="wrap">
+      <div class="head">
+        <div><span class="eyebrow">Contact</span><h2>Écrire ou passer à l'école</h2></div>
+        <p>Pour une inscription, une visite ou une question, la directrice vous répond sous deux jours d'école.</p>
+      </div>
+      <div class="contact-grid">
+        <div class="coords">
+          <div class="coord"><span class="k">Adresse</span><span class="v">25 rue Jules Nadi, 26190 Saint-Jean-en-Royans</span></div>
+          <div class="coord"><span class="k">Téléphone</span><span class="v" id="tel">04 75 47 71 04</span><button class="copy" type="button" data-copy="tel">Copier le numéro</button></div>
+          <div class="coord"><span class="k">E-mail</span><span class="v" id="mail">ecole-jeanne-d-arc3@wanadoo.fr</span><button class="copy" type="button" data-copy="mail">Copier l'adresse</button></div>
+          <a class="mapcard" href="https://www.openstreetmap.org/search?query=25%20rue%20Jules%20Nadi%20Saint-Jean-en-Royans" target="_blank" rel="noopener">
+            <svg viewBox="0 0 400 150" aria-hidden="true">
+              <rect width="400" height="150" fill="var(--forest-soft)"/>
+              <path d="M0 95 C80 80 140 110 220 92 S340 70 400 84" stroke="var(--sky)" stroke-width="14" fill="none"/>
+              <path d="M40 0 L120 150 M0 40 L400 60 M260 0 L230 150" stroke="var(--surface)" stroke-width="8"/>
+              <path d="M200 30 c-14 0 -24 10 -24 24 c0 18 24 40 24 40 s24 -22 24 -40 c0 -14 -10 -24 -24 -24z" fill="var(--sun)" stroke="var(--ink)" stroke-width="3"/>
+              <circle cx="200" cy="54" r="8" fill="var(--ink)"/>
+            </svg>
+            <div>Voir le plan d'accès →</div>
+          </a>
+        </div>
+        <form class="msg" id="contact-form" novalidate>
+          <div class="row2">
+            <label for="f-nom">Votre nom<input id="f-nom" name="nom" autocomplete="name" value="Camille Martin"></label>
+            <label for="f-mail">Votre e-mail<input id="f-mail" name="mail" type="email" autocomplete="email" value="camille.martin@exemple.fr"></label>
+          </div>
+          <label for="f-sujet">Objet
+            <select id="f-sujet" name="sujet">
+              <option>Inscription d'un enfant</option>
+              <option>Demande de visite</option>
+              <option>Cantine / garderie</option>
+              <option>Autre question</option>
+            </select>
+          </label>
+          <label for="f-msg">Message<textarea id="f-msg" name="message">Bonjour, nous emménageons à Saint-Jean-en-Royans et souhaitons inscrire notre fille en moyenne section. Serait-il possible de visiter l'école ?</textarea></label>
+          <button class="btn primary" type="submit">Envoyer le message</button>
+          <p class="sent" id="sent" hidden>Démonstration : dans le vrai site, ce message serait transmis à l'école.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>École Jeanne d'Arc · 25 rue Jules Nadi, 26190 Saint-Jean-en-Royans</span>
+    <span>Établissement de l'Enseignement catholique de la Drôme · <a href="#accueil">Mentions légales</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var el = document.getElementById(b.dataset.copy), label = b.textContent;
+    var done = function () { b.textContent = 'Copié'; setTimeout(function () { b.textContent = label; }, 1500); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+    try { navigator.clipboard.writeText(el.textContent).then(done, fallback); } catch (e) { fallback(); }
+  });
+});
+document.getElementById('contact-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  document.getElementById('sent').hidden = false;
+});
+</script>
