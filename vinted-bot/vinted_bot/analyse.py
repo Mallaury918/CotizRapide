@@ -24,9 +24,9 @@ CRITERES_DEFAUT = {
     "mots_requis": [],
     "pages_reference": 3,
     "rafraichir_reference_heures": 6,
-    "vendeur_ventes_min": 1,
+    "vendeur_ventes_min": 5,
     "vendeur_avis_min": 1,
-    "vendeur_note_min": 0,
+    "vendeur_note_min": 4,
 }
 
 

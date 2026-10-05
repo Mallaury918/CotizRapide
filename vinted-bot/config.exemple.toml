@@ -19,9 +19,9 @@ frais_envoi_revente = 0      # en France, c'est l'acheteur qui paie le port à l
 commission_revente = 0       # 0 sur Vinted (vendeur) ; 0.1 si tu revends ailleurs avec 10 % de frais
 ratio_suspect = 0.2          # prix < 20 % du marché → alerte marquée "suspecte"
 # Vendeur : les profils sans vente ou sans avis sont écartés (mettre 0 pour désactiver)
-vendeur_ventes_min = 1       # nombre minimum d'articles déjà vendus
+vendeur_ventes_min = 5       # nombre minimum d'articles déjà vendus
 vendeur_avis_min = 1         # nombre minimum d'évaluations reçues
-vendeur_note_min = 0         # note minimale sur 5 (ex. 4.5) ; 0 = pas de condition
+vendeur_note_min = 4         # note minimale sur 5 ; 0 = pas de condition
 mots_exclus = [
   "cassé", "casse", "pour pièces", "hs", "ne fonctionne pas", "défaut",
   "boîte vide", "boite vide", "réplique", "replica", "copie", "contrefaçon",

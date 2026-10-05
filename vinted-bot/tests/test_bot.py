@@ -153,9 +153,20 @@ class TestVendeurs(unittest.TestCase):
         self.assertEqual(ids, [601, 603, 604, 605])
 
     def test_filtre_desactivable(self):
-        ids, client = self.passage({11: {}}, {"vendeur_ventes_min": 0, "vendeur_avis_min": 0})
+        ids, client = self.passage({11: {}}, {"vendeur_ventes_min": 0, "vendeur_avis_min": 0,
+                                                "vendeur_note_min": 0})
         self.assertEqual(len(ids), 5)
         self.assertEqual(client.profils_lus, 0)
+
+    def test_seuils_par_defaut_5_ventes_4_etoiles(self):
+        profils = {
+            10: {"given_item_count": 5, "feedback_count": 4, "feedback_reputation": 0.8},   # 5 ventes, 4/5
+            11: {"given_item_count": 4, "feedback_count": 9, "feedback_reputation": 1},     # 4 ventes
+            12: {"given_item_count": 30, "feedback_count": 20, "feedback_reputation": 0.7},  # 3,5/5
+            13: {"given_item_count": 8, "feedback_count": 0, "feedback_reputation": 0},     # aucun avis
+        }
+        ids, _ = self.passage(profils)
+        self.assertEqual(ids, [601, 605])
 
     def test_profil_illisible(self):
         class Panne(FauxClient):
