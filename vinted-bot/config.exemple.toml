@@ -36,7 +36,8 @@ pages_max = 3                # jusqu'à 3 × 96 annonces par lecture si le site 
 historique_jours = 10        # mémoire des prix (quelques centaines de Mo, jusqu'à ~1,5 Go)
 ignorer_sans_marque = true   # les articles sans marque se revendent mal et se comparent mal
 alertes_max_par_heure = 30   # garde-fou contre l'avalanche de notifications
-prix_min = 8                 # sous ce prix, la marge ne vaut pas le déplacement
+prix_min = 2                 # les annonces à 1 € sont souvent des leurres ; le bénéfice_min
+                             # suffit à écarter les petits articles sans marge
 benefice_min = 15            # tous les réglages de [criteres] peuvent être remplacés ici
 comparables_min = 10
 
