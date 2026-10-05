@@ -13,6 +13,10 @@ def euros(x: float) -> str:
     return f"{x:,.2f} €".replace(",", " ").replace(".", ",")
 
 
+def note(x: float) -> str:
+    return f"{x:.1f}".replace(".", ",")
+
+
 def message(aff, recherche: str) -> str:
     a = aff.annonce
     lignes = [
@@ -25,6 +29,9 @@ def message(aff, recherche: str) -> str:
     details = " · ".join(x for x in (a.marque, a.taille and f"Taille {a.taille}", a.etat) if x)
     if details:
         lignes.append(f"🏷️ {html.escape(details)} · ❤️ {a.favoris}")
+    if aff.profil:
+        p = aff.profil
+        lignes.append(f"👤 {html.escape(a.vendeur)} · {p.ventes} vente(s) · ⭐ {note(p.note)} ({p.avis} avis)")
     if aff.suspect:
         lignes.append("⚠️ <i>Prix anormalement bas : vérifie bien l'annonce (arnaque ? pièce manquante ?)</i>")
     lignes.append(f"🔎 {html.escape(recherche)}")
@@ -81,6 +88,10 @@ class Notificateur:
             "footer": {"text": f"{recherche} · {aff.nb_comparables} comparables ({aff.groupe})"
                                + (" · ⚠️ prix suspect" if aff.suspect else "")},
         }
+        if aff.profil:
+            p = aff.profil
+            embed["fields"].append({"name": "Vendeur", "value":
+                                    f"{a.vendeur} · {p.ventes} vente(s) · ⭐ {note(p.note)} ({p.avis} avis)"})
         if a.photo:
             embed["thumbnail"] = {"url": a.photo}
         self._post(self.discord, {"embeds": [embed]})

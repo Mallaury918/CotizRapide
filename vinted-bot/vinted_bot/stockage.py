@@ -17,6 +17,8 @@ class Stockage:
                 id INTEGER, recherche TEXT, titre TEXT, prix REAL, reference REAL,
                 benefice REAL, url TEXT, envoye_le REAL);
             CREATE TABLE IF NOT EXISTS meta (recherche TEXT PRIMARY KEY, dernier_echantillon REAL);
+            CREATE TABLE IF NOT EXISTS vendeurs (
+                id INTEGER PRIMARY KEY, ventes INTEGER, avis INTEGER, note REAL, maj_le REAL);
             CREATE TABLE IF NOT EXISTS flux (
                 id INTEGER PRIMARY KEY, marque TEXT, etat TEXT, prix REAL, catalogue INTEGER,
                 jetons TEXT, vu_le REAL);
@@ -64,8 +66,18 @@ class Stockage:
     def nettoyer(self, jours=30):
         limite = time.time() - jours * 86400
         self.db.execute("DELETE FROM prix WHERE vu_le < ?", (limite,))
+        self.db.execute("DELETE FROM vendeurs WHERE maj_le < ?", (time.time() - 86400,))
         # On garde les annonces vues deux fois plus longtemps pour ne jamais re-notifier
         self.db.execute("DELETE FROM vues WHERE vu_le < ?", (time.time() - 2 * jours * 86400,))
+
+    def profil_en_cache(self, id_, heures=24):
+        return self.db.execute(
+            "SELECT ventes, avis, note FROM vendeurs WHERE id = ? AND maj_le >= ?",
+            (id_, time.time() - heures * 3600)).fetchone()
+
+    def memoriser_profil(self, id_, p):
+        self.db.execute("INSERT OR REPLACE INTO vendeurs VALUES (?, ?, ?, ?, ?)",
+                        (id_, p.ventes, p.avis, p.note, time.time()))
 
     # ─── Flux global ───────────────────────────────────────────────────────────
 

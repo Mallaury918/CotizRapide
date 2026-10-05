@@ -24,6 +24,9 @@ CRITERES_DEFAUT = {
     "mots_requis": [],
     "pages_reference": 3,
     "rafraichir_reference_heures": 6,
+    "vendeur_ventes_min": 1,
+    "vendeur_avis_min": 1,
+    "vendeur_note_min": 0,
 }
 
 
@@ -53,6 +56,7 @@ class Annonce:
     vendeur: str
     favoris: int
     catalogue: int = 0   # catégorie Vinted, si l'API la fournit
+    vendeur_id: int = 0
 
 
 @dataclass
@@ -65,6 +69,14 @@ class Affaire:
     remise: float         # 0.45 = 45 % sous la référence
     benefice: float       # marge estimée à la revente
     suspect: bool         # prix "trop beau pour être vrai"
+    profil: Optional["Profil"] = None
+
+
+@dataclass
+class Profil:
+    ventes: int
+    avis: int
+    note: float           # sur 5
 
 
 def _montant(valeur) -> Optional[float]:
@@ -99,6 +111,7 @@ def normaliser(item: dict) -> Optional[Annonce]:
         vendeur=(item.get("user") or {}).get("login", ""),
         favoris=int(item.get("favourite_count") or 0),
         catalogue=int(item.get("catalog_id") or 0),
+        vendeur_id=int((item.get("user") or {}).get("id") or 0),
     )
 
 
@@ -181,3 +194,17 @@ def evaluer(a: Annonce, historique: list, crit: dict) -> Optional[Affaire]:
         cout_total=round(cout, 2), remise=remise, benefice=benefice,
         suspect=a.prix < reference * crit.get("ratio_suspect", 0.2),
     )
+
+
+def profil_depuis_api(user: dict) -> Profil:
+    return Profil(
+        ventes=int(user.get("given_item_count") or 0),
+        avis=int(user.get("feedback_count") or 0),
+        note=round(float(user.get("feedback_reputation") or 0) * 5, 1),
+    )
+
+
+def vendeur_fiable(p: Profil, crit: dict) -> bool:
+    return (p.ventes >= crit.get("vendeur_ventes_min", 0)
+            and p.avis >= crit.get("vendeur_avis_min", 0)
+            and p.note >= crit.get("vendeur_note_min", 0))

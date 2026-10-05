@@ -16,11 +16,12 @@ import tomllib
 
 import requests
 
-from .analyse import Affaire, Annonce, criteres_pour, evaluer, normaliser
+from .analyse import Affaire, Annonce, Profil, criteres_pour, evaluer, normaliser
 from .client import VintedClient, VintedErreur, params_depuis_url
 from .flux import Flux
 from .notifications import Notificateur
 from .stockage import Stockage
+from .vendeurs import verifier_vendeur
 
 log = logging.getLogger("vinted_bot")
 
@@ -82,7 +83,7 @@ def traiter_recherche(recherche, conf, client, stock, notif) -> int:
         if premier_passage:
             continue
         aff = evaluer(a, historique, crit)
-        if aff:
+        if aff and verifier_vendeur(aff, client, stock, crit):
             notif.envoyer(aff, nom)
             stock.noter_affaire(aff, nom)
             trouvees += 1
@@ -142,7 +143,8 @@ def test_notif(notif):
                 marque="Nike", taille="42", etat="Très bon état",
                 url="https://www.vinted.fr/", photo="", vendeur="test", favoris=3)
     notif.envoyer(Affaire(annonce=a, reference=70.0, nb_comparables=54, groupe="Nike · Très bon état",
-                          cout_total=30.45, remise=0.565, benefice=39.55, suspect=False), "Test")
+                          cout_total=30.45, remise=0.565, benefice=39.55, suspect=False,
+                          profil=Profil(ventes=48, avis=31, note=4.9)), "Test")
 
 
 def telegram_id(conf):

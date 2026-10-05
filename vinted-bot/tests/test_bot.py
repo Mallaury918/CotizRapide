@@ -8,14 +8,26 @@ from vinted_bot.flux import Flux, comparables, jetons
 from vinted_bot.stockage import Stockage
 
 
-def item(id_, prix, titre="Nike Dunk Low Panda", marque="Nike", etat="Très bon état"):
+BON_VENDEUR = {"given_item_count": 12, "feedback_count": 9, "feedback_reputation": 0.96}
+
+
+def item(id_, prix, titre="Nike Dunk Low Panda", marque="Nike", etat="Très bon état", vendeur=7):
     return {"id": id_, "title": titre, "price": {"amount": f"{prix:.1f}", "currency_code": "EUR"},
             "brand_title": marque, "status": etat, "size_title": "42",
             "url": f"https://www.vinted.fr/items/{id_}", "photo": {"url": ""},
-            "user": {"login": "x"}, "favourite_count": 2}
+            "user": {"id": vendeur, "login": f"membre{vendeur}"}, "favourite_count": 2}
 
 
-class FauxClient:
+class ProfilsMixin:
+    profils = {}
+    profils_lus = 0
+
+    def utilisateur(self, id_):
+        self.profils_lus += 1
+        return self.profils.get(id_, BON_VENDEUR)
+
+
+class FauxClient(ProfilsMixin):
     def __init__(self, marche, nouvelles):
         self.marche, self.nouvelles = marche, nouvelles
 
@@ -106,9 +118,57 @@ class TestBoucle(unittest.TestCase):
         # 3e passage : rien de neuf → pas de doublon
         bot.traiter_recherche(recherche, conf, client, stock, notif)
         self.assertEqual(len(notif.recues), 1)
+        self.assertEqual(notif.recues[0].profil.ventes, 12)
 
 
-class FauxFlux:
+class TestVendeurs(unittest.TestCase):
+    def passage(self, profils, conf_criteres=None):
+        rnd = random.Random(4)
+        marche = [item(i, rnd.uniform(60, 90), vendeur=1) for i in range(1, 150)]
+        recherche = {"nom": "Dunk", "mots_cles": "nike dunk"}
+        conf = {"recherches": [recherche], "criteres": conf_criteres or {}}
+        stock, notif = Stockage(":memory:"), FauxNotif()
+        client = FauxClient(marche, marche[:5])
+        client.profils = profils
+        bot.traiter_recherche(recherche, conf, client, stock, notif)
+        client.nouvelles = [item(601, 20, vendeur=10), item(602, 21, vendeur=11),
+                            item(603, 22, vendeur=12), item(604, 23, vendeur=13), item(605, 24, vendeur=10)]
+        bot.traiter_recherche(recherche, conf, client, stock, notif)
+        return [a.annonce.id for a in notif.recues], client
+
+    def test_filtre_par_defaut(self):
+        profils = {
+            10: BON_VENDEUR,
+            11: {"given_item_count": 0, "feedback_count": 3, "feedback_reputation": 1},  # aucune vente
+            12: {"given_item_count": 4, "feedback_count": 0},                            # aucun avis
+            13: {},                                                                      # profil neuf
+        }
+        ids, client = self.passage(profils)
+        self.assertEqual(ids, [601, 605])
+        self.assertEqual(client.profils_lus, 4)   # le vendeur 10 n'est lu qu'une fois (cache)
+
+    def test_note_minimale(self):
+        profils = {10: BON_VENDEUR, 11: {**BON_VENDEUR, "feedback_reputation": 0.7}}
+        ids, _ = self.passage(profils, {"vendeur_note_min": 4.5})
+        self.assertEqual(ids, [601, 603, 604, 605])
+
+    def test_filtre_desactivable(self):
+        ids, client = self.passage({11: {}}, {"vendeur_ventes_min": 0, "vendeur_avis_min": 0})
+        self.assertEqual(len(ids), 5)
+        self.assertEqual(client.profils_lus, 0)
+
+    def test_profil_illisible(self):
+        class Panne(FauxClient):
+            def utilisateur(self, id_):
+                raise OSError("réseau")
+        stock, notif = Stockage(":memory:"), FauxNotif()
+        hist = [(i, 70.0, "Nike", "Très bon état") for i in range(1, 40)]
+        from vinted_bot.vendeurs import verifier_vendeur
+        aff = evaluer(normaliser(item(999, 20)), hist, CRIT)
+        self.assertFalse(verifier_vendeur(aff, Panne([], []), stock, CRIT))
+
+
+class FauxFlux(ProfilsMixin):
     """Simule le flux « nouveautés » de tout Vinted : chaque appel renvoie le lot suivant."""
 
     def __init__(self):

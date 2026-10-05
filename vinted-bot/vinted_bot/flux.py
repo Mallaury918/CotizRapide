@@ -13,6 +13,7 @@ import time
 from collections import deque
 
 from .analyse import criteres_pour, evaluer, normaliser, passe_filtres, simplifier
+from .vendeurs import verifier_vendeur
 
 log = logging.getLogger(__name__)
 
@@ -128,6 +129,8 @@ class Flux:
             if not self._peut_alerter():
                 log.warning("[Flux] Limite de %d alertes/heure atteinte, affaire ignorée : %s",
                             self.alertes_max, a.url)
+                continue
+            if not verifier_vendeur(aff, client, stock, self.crit):
                 continue
             aff.groupe += " · titres proches"
             notif.envoyer(aff, "Tout Vinted")

@@ -42,7 +42,11 @@ fraîches, ce qui compte le plus pour acheter avant les autres.
 3. **Il compte le coût réel**, c'est-à-dire prix + protection acheteurs (0,70 € + 5 %) + livraison.
 4. **Il t'alerte** si ce coût est au moins **35 % sous le prix du marché** *et* que la marge
    estimée dépasse **10 €**. Ces deux seuils se règlent.
-5. Si le prix est vraiment trop bas (< 20 % du marché), l'alerte est marquée ⚠️. C'est
+5. **Il vérifie le vendeur.** Pour chaque bonne affaire, il consulte le profil : un vendeur
+   **sans aucune vente ou sans aucun avis** est écarté. Tu peux aussi exiger une note minimale
+   (`vendeur_note_min = 4.5`). L'alerte affiche les ventes, la note et le nombre d'avis.
+   Les profils restent 24 h en mémoire, pour ne pas les redemander à Vinted.
+6. Si le prix est vraiment trop bas (< 20 % du marché), l'alerte est marquée ⚠️. C'est
    souvent une arnaque, un article cassé ou une boîte vide.
 
 Au **premier lancement**, il mémorise les annonces déjà en ligne sans t'alerter. Les alertes

@@ -79,13 +79,20 @@ class VintedClient:
     def rechercher(self, params: dict, ordre="newest_first", page=1, par_page=96) -> list:
         """Renvoie la liste brute des annonces (dicts JSON) d'une page de résultats."""
         requete = {**params, "order": ordre, "page": page, "per_page": par_page}
+        return self._api("/api/v2/catalog/items", requete).get("items", [])
+
+    def utilisateur(self, id_: int) -> dict:
+        """Profil public d'un membre (ventes, avis, note…)."""
+        return self._api(f"/api/v2/users/{id_}").get("user", {})
+
+    def _api(self, chemin: str, params=None) -> dict:
         for tentative in range(3):
             if self.session is None:
                 self._nouvelle_session()
             self._attendre()
-            r = self.session.get(self.base + "/api/v2/catalog/items", params=requete, timeout=20)
+            r = self.session.get(self.base + chemin, params=params, timeout=20)
             if r.status_code == 200:
-                return r.json().get("items", [])
+                return r.json()
             if r.status_code in (401, 403):
                 log.info("Session expirée (HTTP %s), renouvellement…", r.status_code)
                 self.session = None
