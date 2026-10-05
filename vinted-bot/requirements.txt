@@ -1,0 +1,2 @@
+requests>=2.28
+curl_cffi>=0.7  # facultatif mais conseillé : évite la plupart des blocages anti-robot

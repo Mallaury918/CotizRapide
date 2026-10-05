@@ -1,0 +1,61 @@
+# Configuration du bot Vinted : copie ce fichier en "config.toml" puis adapte-le.
+
+[general]
+domaine = "www.vinted.fr"          # ou www.vinted.be, www.vinted.es, …
+intervalle_minutes = 5             # temps entre deux passages (ne descends pas trop bas)
+pause_entre_requetes = [2.0, 5.0]  # pause aléatoire (secondes) entre deux appels à Vinted
+base_de_donnees = "vinted_bot.db"
+historique_jours = 30              # durée de mémoire des prix pour estimer le marché
+
+# Critères par défaut, appliqués à toutes les recherches (chaque recherche peut les remplacer)
+[criteres]
+remise_min = 0.35            # alerte si le coût réel est au moins 35 % sous le prix du marché
+benefice_min = 10            # … ET si la marge estimée dépasse 10 €
+percentile_reference = 40    # 50 = prix médian ; 40 = plus prudent (les annonces trop chères
+                             # restent en ligne plus longtemps et gonflent la médiane)
+comparables_min = 15         # nombre minimum d'annonces similaires pour faire confiance au prix
+frais_livraison_achat = 3.5  # livraison que tu paies à l'achat (en €)
+frais_envoi_revente = 0      # en France, c'est l'acheteur qui paie le port à la revente
+commission_revente = 0       # 0 sur Vinted (vendeur) ; 0.1 si tu revends ailleurs avec 10 % de frais
+ratio_suspect = 0.2          # prix < 20 % du marché → alerte marquée "suspecte"
+mots_exclus = [
+  "cassé", "casse", "pour pièces", "hs", "ne fonctionne pas", "défaut",
+  "boîte vide", "boite vide", "réplique", "replica", "copie", "contrefaçon",
+  "lot", "échange", "recherche",
+]
+
+[notifications]
+console = true
+# Telegram (recommandé, alertes sur ton téléphone) : voir le README
+telegram_token = ""
+telegram_chat_id = ""
+# Discord : Paramètres du salon > Intégrations > Webhooks > Copier l'URL
+discord_webhook = ""
+
+# ─── Tes recherches ────────────────────────────────────────────────────────────
+# Le plus simple : fais ta recherche sur vinted.fr avec les filtres (catégorie, marque,
+# taille, état…), puis copie l'URL de la page dans "url".
+# Conseil : plus la recherche est précise (catégorie + marque), plus le prix de
+# référence est fiable. Une recherche "iphone" mélange coques et téléphones !
+
+[[recherches]]
+nom = "Nike Dunk Low"
+url = "https://www.vinted.fr/catalog?search_text=nike%20dunk%20low"
+prix_min = 20                # écarte accessoires, lacets…
+prix_max = 90
+mots_requis = ["dunk"]       # le titre doit contenir ces mots
+mots_exclus = ["enfant", "bébé"]
+
+[[recherches]]
+nom = "Nintendo Switch OLED"
+mots_cles = "switch oled"
+prix_min = 100
+mots_exclus = ["coque", "housse", "protection", "jeu", "manette", "boîte seule"]
+remise_min = 0.25            # sur l'électronique, -25 % est déjà intéressant
+benefice_min = 30
+
+[[recherches]]
+nom = "Ralph Lauren pull"
+url = "https://www.vinted.fr/catalog?search_text=ralph%20lauren%20pull"
+prix_max = 40
+actif = false                # mettre à true pour l'activer
