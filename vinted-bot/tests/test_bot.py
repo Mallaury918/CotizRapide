@@ -2,8 +2,9 @@ import random
 import unittest
 
 from vinted_bot import __main__ as bot
-from vinted_bot.analyse import evaluer, normaliser, passe_filtres
+from vinted_bot.analyse import CRITERES_DEFAUT, evaluer, normaliser, passe_filtres
 from vinted_bot.client import params_depuis_url
+from vinted_bot.flux import Flux, comparables, jetons
 from vinted_bot.stockage import Stockage
 
 
@@ -32,7 +33,7 @@ class FauxNotif:
         self.recues.append(aff)
 
 
-CRIT = {**bot.CRITERES_DEFAUT, "mots_exclus": ["cassé", "boîte vide"]}
+CRIT = {**CRITERES_DEFAUT, "mots_exclus": ["cassé", "boîte vide"]}
 
 
 class TestAnalyse(unittest.TestCase):
@@ -105,6 +106,81 @@ class TestBoucle(unittest.TestCase):
         # 3e passage : rien de neuf → pas de doublon
         bot.traiter_recherche(recherche, conf, client, stock, notif)
         self.assertEqual(len(notif.recues), 1)
+
+
+class FauxFlux:
+    """Simule le flux « nouveautés » de tout Vinted : chaque appel renvoie le lot suivant."""
+
+    def __init__(self):
+        self.lots = []
+
+    def rechercher(self, params, ordre="newest_first", page=1, par_page=96):
+        self.appels = getattr(self, "appels", 0) + 1
+        return self.lots[page - 1] if page <= len(self.lots) else []
+
+
+class TestFlux(unittest.TestCase):
+    def test_jetons(self):
+        self.assertEqual(jetons("Nike Dunk Low Panda taille 42 TBE", "Nike", "42"), {"dunk", "low", "panda"})
+        self.assertEqual(jetons("T-shirt Ralph Lauren T.38", "Ralph Lauren", "M"), {"tshirt"})
+
+    def test_comparables(self):
+        dunk = {"dunk", "low", "panda"}
+        self.assertTrue(comparables(dunk, {"baskets", "dunk", "low", "panda"}))
+        self.assertTrue(comparables(dunk, {"dunk", "low"}))
+        self.assertFalse(comparables({"chaussettes", "dunk", "panda"}, dunk))
+        self.assertFalse(comparables({"coque", "iphone", "15"}, {"iphone", "15", "128"}))
+        self.assertFalse(comparables({"pull", "col", "rond"}, {"polo", "col", "rond"}))
+        self.assertFalse(comparables({"air", "max", "90"}, dunk))
+
+    def test_flux_complet(self):
+        rnd = random.Random(3)
+        n = iter(range(1000, 100000))
+        conf = {"flux": {"actif": True, "pages_max": 2}, "criteres": {"mots_exclus": ["cassé"]}}
+        flux, stock, notif, client = Flux(conf), Stockage(":memory:"), FauxNotif(), FauxFlux()
+
+        # Le marché : des Dunk entre 60 et 90 €, des chaussettes Dunk entre 8 et 12 €
+        marche = [item(next(n), rnd.uniform(60, 90), titre="Nike Dunk Low Panda") for _ in range(30)]
+        marche += [item(next(n), rnd.uniform(8, 12), titre="Chaussettes Nike Dunk Panda") for _ in range(30)]
+        marche += [item(next(n), 30, titre="Pull vintage", marque="") for _ in range(20)]
+        client.lots = [list(reversed(marche))]
+        flux.passage(client, stock, notif)
+        self.assertEqual(stock.taille_flux(), 60)   # les annonces sans marque sont ignorées
+        self.assertEqual(notif.recues, [])
+
+        # Nouveautés : vraie affaire, chaussettes à prix normal, Dunk cassées
+        nouvelles = [item(next(n), 22, titre="Baskets Nike Dunk Low Panda"),
+                     item(next(n), 6, titre="Chaussettes Nike Dunk Panda"),
+                     item(next(n), 15, titre="Nike Dunk Low Panda cassé")]
+        client.lots = [list(reversed(nouvelles)) + client.lots[0][:10]]
+        flux.passage(client, stock, notif)
+        self.assertEqual([a.annonce.titre for a in notif.recues], ["Baskets Nike Dunk Low Panda"])
+        self.assertIn("titres proches", notif.recues[0].groupe)
+
+        # Repassage : aucune alerte en double
+        flux.passage(client, stock, notif)
+        self.assertEqual(len(notif.recues), 1)
+
+    def test_lecture_de_plusieurs_pages_si_retard(self):
+        stock, client = Stockage(":memory:"), FauxFlux()
+        flux = Flux({"flux": {"pages_max": 3}})
+        client.lots = [[item(100, 50)]]
+        flux.passage(client, stock, FauxNotif())
+        # Deux pages entières sans retrouver l'annonce 100 → le bot lit la page suivante
+        client.appels = 0
+        client.lots = [[item(300, 50)], [item(200, 50)], [item(100, 50)]]
+        flux.passage(client, stock, FauxNotif())
+        self.assertEqual(client.appels, 3)
+        self.assertEqual(stock.taille_flux(), 3)
+
+    def test_nettoyage(self):
+        stock = Stockage(":memory:")
+        a = normaliser(item(1, 50))
+        stock.enregistrer_flux([(a, {"dunk", "low"})])
+        stock.db.execute("UPDATE flux SET vu_le = 0")
+        stock.nettoyer_flux(10)
+        self.assertEqual(stock.taille_flux(), 0)
+        self.assertEqual(stock.db.execute("SELECT COUNT(*) FROM flux_jetons").fetchone()[0], 0)
 
 
 if __name__ == "__main__":

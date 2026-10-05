@@ -24,6 +24,22 @@ mots_exclus = [
   "lot", "échange", "recherche",
 ]
 
+# ─── Surveillance de TOUT Vinted ───────────────────────────────────────────────
+# Le bot lit en continu les nouvelles annonces de tout le site, sans mots-clés. Il compare
+# chaque article aux annonces de la même marque, au titre proche et du même type (des
+# chaussettes Nike ne sont jamais comparées à des baskets Nike). Il apprend les prix au fil
+# du temps : les premières heures, il y a peu d'alertes, puis de plus en plus.
+[flux]
+actif = true
+intervalle_secondes = 30     # lecture des nouveautés toutes les ~30 s
+pages_max = 3                # jusqu'à 3 × 96 annonces par lecture si le site publie vite
+historique_jours = 10        # mémoire des prix (quelques centaines de Mo, jusqu'à ~1,5 Go)
+ignorer_sans_marque = true   # les articles sans marque se revendent mal et se comparent mal
+alertes_max_par_heure = 30   # garde-fou contre l'avalanche de notifications
+prix_min = 8                 # sous ce prix, la marge ne vaut pas le déplacement
+benefice_min = 15            # tous les réglages de [criteres] peuvent être remplacés ici
+comparables_min = 10
+
 [notifications]
 console = true
 # Telegram (recommandé, alertes sur ton téléphone) : voir le README
@@ -32,7 +48,8 @@ telegram_chat_id = ""
 # Discord : Paramètres du salon > Intégrations > Webhooks > Copier l'URL
 discord_webhook = ""
 
-# ─── Tes recherches ────────────────────────────────────────────────────────────
+# ─── Recherches ciblées (facultatives, en plus du flux) ────────────────────────
+# Utile pour suivre de près un article précis : le prix de référence y est plus fiable.
 # Le plus simple : fais ta recherche sur vinted.fr avec les filtres (catégorie, marque,
 # taille, état…), puis copie l'URL de la page dans "url".
 # Conseil : plus la recherche est précise (catégorie + marque), plus le prix de
@@ -45,6 +62,7 @@ prix_min = 20                # écarte accessoires, lacets…
 prix_max = 90
 mots_requis = ["dunk"]       # le titre doit contenir ces mots
 mots_exclus = ["enfant", "bébé"]
+actif = false                # mettre à true pour l'activer
 
 [[recherches]]
 nom = "Nintendo Switch OLED"
@@ -53,6 +71,7 @@ prix_min = 100
 mots_exclus = ["coque", "housse", "protection", "jeu", "manette", "boîte seule"]
 remise_min = 0.25            # sur l'électronique, -25 % est déjà intéressant
 benefice_min = 30
+actif = false
 
 [[recherches]]
 nom = "Ralph Lauren pull"

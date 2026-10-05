@@ -3,10 +3,39 @@
 Ce bot surveille Vinted en continu. Il t'envoie sur **Telegram** (ou Discord) les nouvelles
 annonces vendues **nettement moins cher que des annonces similaires**, pour acheter et revendre.
 
+Il fonctionne de deux façons, utilisables ensemble :
+
+- **Tout Vinted** (section `[flux]`, activée par défaut) : il lit en continu les nouvelles
+  annonces de tout le site, sans mots-clés à écrire.
+- **Recherches ciblées** (`[[recherches]]`, facultatives) : il suit de près les articles
+  que tu choisis, avec un prix de référence plus fiable.
+
+## Le mode « tout Vinted »
+
+Toutes les ~30 secondes, le bot lit les dernières annonces publiées sur tout le site.
+Si le site publie plus vite qu'il ne lit, il lit jusqu'à 3 pages d'affilée. Pour chaque
+annonce, il cherche dans sa mémoire des **articles vraiment semblables** :
+
+- **la même marque** ;
+- **un titre proche** : au moins 40 % de mots en commun, sans compter la marque, la taille
+  ni les mots comme « très bon état » ;
+- **le même type d'article** : des chaussettes Nike ne sont jamais comparées à des baskets
+  Nike, ni une coque d'iPhone à un iPhone.
+
+Il construit lui-même sa base de prix à partir de tout ce qu'il voit. **Les premières heures,
+il apprend et alerte peu**, puis de plus en plus au fil des jours. Les articles sans marque
+sont ignorés par défaut, car ils se comparent et se revendent mal. Un garde-fou limite les
+alertes à 30 par heure.
+
+Il ne peut pas voir 100 % des annonces : Vinted en publie plusieurs par seconde, et lire
+plus vite exposerait le bot à un blocage. Il en voit une grande partie, en priorité les plus
+fraîches, ce qui compte le plus pour acheter avant les autres.
+
 ## Comment il décide qu'une annonce est une bonne affaire
 
-1. **Il étudie le marché.** Pour chaque recherche, il relève les prix de ~300 annonces
-   (toutes les 6 h) et garde un historique de 30 jours.
+1. **Il étudie le marché.** En mode « tout Vinted », il mémorise les prix de toutes les
+   annonces lues pendant 10 jours. Pour une recherche ciblée, il relève les prix d'environ
+   300 annonces toutes les 6 h et garde un historique de 30 jours.
 2. **Il compare ce qui est comparable.** Il prend d'abord les annonces de la même **marque
    et dans le même état**. S'il n'y en a pas assez, il prend la même marque, puis toute la
    recherche. Les prix aberrants sont écartés.
@@ -39,7 +68,7 @@ cp config.exemple.toml config.toml      # Windows : copy config.exemple.toml con
 3. Lance `python -m vinted_bot --telegram-id` et copie la ligne affichée dans `config.toml`.
 4. Vérifie avec `python -m vinted_bot --test-notif` : tu dois recevoir une alerte de test.
 
-## Configurer tes recherches
+## Configurer tes recherches (facultatif)
 
 Dans `config.toml`, chaque bloc `[[recherches]]` est une veille. Le plus simple :
 
@@ -80,9 +109,12 @@ la table `affaires` du fichier `vinted_bot.db`.
   le bot se base sur les annonces en ligne. Celles qui sont trop chères restent en ligne
   plus longtemps, ce qui gonfle la moyenne. C'est pourquoi la référence par défaut est le
   40ᵉ percentile plutôt que la médiane (`percentile_reference`). Vérifie toujours avant d'acheter.
-- **Anti-robot.** Vinted peut bloquer temporairement les requêtes trop nombreuses. Garde
-  un intervalle d'au moins 3 à 5 minutes, ne multiplie pas les recherches et installe
-  `curl_cffi`. Si tu vois des erreurs HTTP 403, ralentis.
+- **Anti-robot.** Vinted peut bloquer temporairement les requêtes trop nombreuses. Le mode
+  « tout Vinted » fait déjà 2 à 6 requêtes par minute. Ne baisse pas `intervalle_secondes`
+  sous 20, n'active pas trop de recherches en plus, et installe `curl_cffi`. Si tu vois des
+  erreurs HTTP 403 ou 429, ralentis (par exemple `intervalle_secondes = 60`).
+- **Place sur le disque.** La mémoire des prix du mode « tout Vinted » occupe quelques
+  centaines de Mo, jusqu'à environ 1,5 Go. Réduis `historique_jours` si besoin.
 - **Conditions d'utilisation.** Vinted n'autorise pas officiellement l'accès automatisé à
   son site. Utilise ce bot pour un usage personnel et raisonnable. Côté fiscal, l'achat-revente
   régulier dans un but lucratif est une activité commerciale à déclarer (micro-entreprise).

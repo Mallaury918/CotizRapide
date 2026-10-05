@@ -9,6 +9,35 @@ from typing import Optional
 PROTECTION_FIXE = 0.70
 PROTECTION_TAUX = 0.05
 
+CRITERES_DEFAUT = {
+    "remise_min": 0.35,
+    "benefice_min": 10,
+    "percentile_reference": 40,
+    "comparables_min": 15,
+    "frais_livraison_achat": 3.5,
+    "frais_envoi_revente": 0,
+    "commission_revente": 0,
+    "ratio_suspect": 0.2,
+    "prix_min": 0,
+    "prix_max": 0,
+    "mots_exclus": [],
+    "mots_requis": [],
+    "pages_reference": 3,
+    "rafraichir_reference_heures": 6,
+}
+
+
+def criteres_pour(source: dict, conf: dict) -> dict:
+    """Critères globaux de [criteres], remplacés par ceux de `source` (une recherche ou [flux])."""
+    crit = {**CRITERES_DEFAUT, **conf.get("criteres", {})}
+    for cle in CRITERES_DEFAUT:
+        if cle in source:
+            crit[cle] = source[cle]
+    # Les mots exclus globaux s'ajoutent à ceux de la source
+    crit["mots_exclus"] = list(conf.get("criteres", {}).get("mots_exclus", [])) + list(
+        source.get("mots_exclus", []))
+    return crit
+
 
 @dataclass
 class Annonce:
@@ -23,6 +52,7 @@ class Annonce:
     photo: str
     vendeur: str
     favoris: int
+    catalogue: int = 0   # catégorie Vinted, si l'API la fournit
 
 
 @dataclass
@@ -68,6 +98,7 @@ def normaliser(item: dict) -> Optional[Annonce]:
         photo=photo.get("url") or "",
         vendeur=(item.get("user") or {}).get("login", ""),
         favoris=int(item.get("favourite_count") or 0),
+        catalogue=int(item.get("catalog_id") or 0),
     )
 
 

@@ -16,29 +16,13 @@ import tomllib
 
 import requests
 
-from .analyse import Affaire, Annonce, evaluer, normaliser
+from .analyse import Affaire, Annonce, criteres_pour, evaluer, normaliser
 from .client import VintedClient, VintedErreur, params_depuis_url
+from .flux import Flux
 from .notifications import Notificateur
 from .stockage import Stockage
 
 log = logging.getLogger("vinted_bot")
-
-CRITERES_DEFAUT = {
-    "remise_min": 0.35,
-    "benefice_min": 10,
-    "percentile_reference": 40,
-    "comparables_min": 15,
-    "frais_livraison_achat": 3.5,
-    "frais_envoi_revente": 0,
-    "commission_revente": 0,
-    "ratio_suspect": 0.2,
-    "prix_min": 0,
-    "prix_max": 0,
-    "mots_exclus": [],
-    "mots_requis": [],
-    "pages_reference": 3,
-    "rafraichir_reference_heures": 6,
-}
 
 
 def charger_config(chemin):
@@ -50,20 +34,10 @@ def charger_config(chemin):
                  "Copie config.exemple.toml en config.toml puis adapte-le.")
     except tomllib.TOMLDecodeError as e:
         sys.exit(f"Erreur dans {chemin} : {e}")
-    if not conf.get("recherches"):
-        sys.exit("Aucune [[recherches]] dans la configuration.")
+    conf.setdefault("recherches", [])
+    if not any(r.get("actif", True) for r in conf["recherches"]) and not conf.get("flux", {}).get("actif"):
+        sys.exit("Rien à surveiller : active [flux] ou ajoute des [[recherches]] dans la configuration.")
     return conf
-
-
-def criteres_pour(recherche: dict, conf: dict) -> dict:
-    crit = {**CRITERES_DEFAUT, **conf.get("criteres", {})}
-    for cle in CRITERES_DEFAUT:
-        if cle in recherche:
-            crit[cle] = recherche[cle]
-    # Les mots exclus globaux s'ajoutent à ceux de la recherche
-    crit["mots_exclus"] = list(conf.get("criteres", {}).get("mots_exclus", [])) + list(
-        recherche.get("mots_exclus", []))
-    return crit
 
 
 def params_pour(recherche: dict, crit: dict) -> dict:
@@ -121,20 +95,46 @@ def traiter_recherche(recherche, conf, client, stock, notif) -> int:
     return trouvees
 
 
-def un_passage(conf, client, stock, notif):
+def sans_planter(nom, fonction, *args):
+    """Le bot tourne en continu : une erreur est journalisée, puis on passe à la suite."""
+    try:
+        fonction(*args)
+    except VintedErreur as e:
+        log.error("[%s] %s", nom, e)
+    except (requests.RequestException, OSError, ValueError) as e:
+        log.error("[%s] Erreur réseau : %s", nom, e)
+    except Exception:
+        log.exception("[%s] Erreur inattendue", nom)
+
+
+def passage_recherches(conf, client, stock, notif):
     for recherche in conf["recherches"]:
-        if not recherche.get("actif", True):
-            continue
-        try:
-            traiter_recherche(recherche, conf, client, stock, notif)
-        except VintedErreur as e:
-            log.error("[%s] %s", recherche["nom"], e)
-        except (requests.RequestException, OSError, ValueError) as e:
-            log.error("[%s] Erreur réseau : %s", recherche["nom"], e)
-        except Exception:  # le bot tourne en continu : on journalise et on passe à la suite
-            log.exception("[%s] Erreur inattendue", recherche["nom"])
+        if recherche.get("actif", True):
+            sans_planter(recherche["nom"], traiter_recherche, recherche, conf, client, stock, notif)
     stock.nettoyer(conf.get("general", {}).get("historique_jours", 30))
     stock.valider()
+
+
+def passage_flux(flux, client, stock, notif):
+    sans_planter("Flux", flux.passage, client, stock, notif)
+    stock.nettoyer_flux(flux.jours)
+    stock.valider()
+
+
+def boucle(conf, client, stock, notif, flux):
+    """Fait tourner les recherches et le flux global, chacun à son rythme."""
+    taches = []
+    if any(r.get("actif", True) for r in conf["recherches"]):
+        intervalle = conf.get("general", {}).get("intervalle_minutes", 5) * 60
+        taches.append([0.0, intervalle, lambda: passage_recherches(conf, client, stock, notif)])
+    if flux.actif:
+        taches.append([0.0, flux.intervalle, lambda: passage_flux(flux, client, stock, notif)])
+    while True:
+        for tache in taches:
+            if time.time() >= tache[0]:
+                tache[2]()
+                tache[0] = time.time() + tache[1] * random.uniform(0.85, 1.15)
+        time.sleep(max(1.0, min(t[0] for t in taches) - time.time()))
 
 
 def test_notif(notif):
@@ -181,16 +181,22 @@ def main():
     client = VintedClient(g.get("domaine", "www.vinted.fr"), tuple(g.get("pause_entre_requetes", [2, 5])))
     stock = Stockage(g.get("base_de_donnees", "vinted_bot.db"))
 
-    if args.une_fois:
-        return un_passage(conf, client, stock, notif)
+    flux = Flux(conf)
 
-    intervalle = g.get("intervalle_minutes", 5) * 60
-    log.info("Bot démarré : %d recherche(s), passage toutes les %d min. Ctrl+C pour arrêter.",
-             len(conf["recherches"]), intervalle // 60)
+    if args.une_fois:
+        passage_recherches(conf, client, stock, notif)
+        if flux.actif:
+            passage_flux(flux, client, stock, notif)
+        return
+
+    actives = sum(r.get("actif", True) for r in conf["recherches"])
+    log.info("Bot démarré : %s%d recherche(s) ciblée(s). Ctrl+C pour arrêter.",
+             f"tout Vinted toutes les {flux.intervalle} s + " if flux.actif else "", actives)
+    if flux.actif and stock.taille_flux() < 5000:
+        log.info("[Flux] Les premières heures, le bot apprend les prix du marché : "
+                 "les alertes arriveront au fur et à mesure.")
     try:
-        while True:
-            un_passage(conf, client, stock, notif)
-            time.sleep(intervalle * random.uniform(0.85, 1.15))
+        boucle(conf, client, stock, notif, flux)
     except KeyboardInterrupt:
         log.info("Arrêt demandé, à bientôt !")
 
