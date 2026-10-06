@@ -46,6 +46,20 @@ def _attribut(ad: dict, cle: str) -> str:
     return ""
 
 
+def _marque(ad: dict) -> str:
+    """Le champ « brand » vaut « leboncoin » (le site) : la vraie marque est dans un attribut,
+    « brand » ou propre à la catégorie (« console_brand », « phone_brand »…)."""
+    marque = _attribut(ad, "brand")
+    if not marque:
+        for attr in ad.get("attributes") or []:
+            if str(attr.get("key", "")).endswith("_brand"):
+                marque = (attr.get("value_label") or attr.get("value") or "").strip()
+                break
+    if not marque and str(ad.get("brand", "")).lower() not in ("", "leboncoin"):
+        marque = ad["brand"].strip()
+    return marque
+
+
 def normaliser_lbc(ad: dict):
     """Convertit une annonce Leboncoin au format commun du bot."""
     prix = None
@@ -63,7 +77,7 @@ def normaliser_lbc(ad: dict):
         prix=prix,
         # Paiement sécurisé : on applique la même estimation de frais que sur Vinted
         prix_total=round(prix + PROTECTION_FIXE + prix * PROTECTION_TAUX, 2),
-        marque=(ad.get("brand") or _attribut(ad, "brand")).strip(),
+        marque=_marque(ad),
         taille=_attribut(ad, "clothing_tag") or _attribut(ad, "shoe_size"),
         etat=_attribut(ad, "condition"),
         url=ad.get("url") or f"{SITE}/ad/{ad['list_id']}",

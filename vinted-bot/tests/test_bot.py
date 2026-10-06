@@ -318,6 +318,15 @@ class TestLeboncoin(unittest.TestCase):
         self.assertEqual(a.photo, "https://img.leboncoin.fr/77.jpg")
         self.assertIsNone(normaliser_lbc({"list_id": 1, "subject": "Don", "price": [0]}))
 
+    def test_marque_reelle_et_pas_leboncoin(self):
+        ad = ad_lbc(1, 80)
+        ad["brand"] = "leboncoin"
+        ad["attributes"] = [{"key": "console_brand", "value": "nintendo", "value_label": "Nintendo"},
+                            {"key": "condition", "value_label": "État neuf"}]
+        self.assertEqual(normaliser_lbc(ad).marque, "Nintendo")
+        ad["attributes"] = []
+        self.assertEqual(normaliser_lbc(ad).marque, "")
+
     def test_requete_livraison_toute_la_france(self):
         r = requete_recherche({"mots_cles": "switch oled"}, {"prix_min": 100, "prix_max": 300},
                               recentes=True, page=2, par_page=35, livraison=True)
