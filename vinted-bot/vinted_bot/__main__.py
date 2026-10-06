@@ -156,12 +156,20 @@ def boucle(conf, client, stock, notif, flux, lbc=None):
 
 
 def test_notif(notif):
+    """Envoie une fausse alerte Vinted puis une fausse alerte Leboncoin."""
     a = Annonce(id=0, titre="Nike Dunk Low Panda (TEST)", prix=25.0, prix_total=26.95,
                 marque="Nike", taille="42", etat="Très bon état",
                 url="https://www.vinted.fr/", photo="", vendeur="test", favoris=3)
     notif.envoyer(Affaire(annonce=a, reference=70.0, nb_comparables=54, groupe="Nike · Très bon état",
                           cout_total=30.45, remise=0.565, benefice=39.55, suspect=False,
-                          profil=Profil(ventes=48, avis=31, note=4.9)), "Test")
+                          profil=Profil(ventes=48, avis=31, note=4.9)), "Vinted · Test")
+    b = Annonce(id=0, titre="Nintendo Switch OLED blanche (TEST)", prix=150.0, prix_total=154.49,
+                marque="Nintendo", taille="", etat="Très bon état",
+                url="https://www.leboncoin.fr/", photo="", vendeur="test", favoris=6, livraison=4.99)
+    notif.envoyer(Affaire(annonce=b, reference=240.0, nb_comparables=37, groupe="Nintendo · Très bon état",
+                          cout_total=159.48, remise=0.336, benefice=80.52, suspect=False,
+                          profil=Profil(ventes=25, avis=25, note=4.8, ventes_connues=False)),
+                  "Leboncoin · Test")
 
 
 def telegram_id(conf):
@@ -251,7 +259,7 @@ def main():
     p = argparse.ArgumentParser(description="Veille des bonnes affaires Vinted")
     p.add_argument("-c", "--config", default="config.toml")
     p.add_argument("--une-fois", action="store_true", help="un seul passage puis quitter")
-    p.add_argument("--test-notif", action="store_true", help="envoyer une alerte de test")
+    p.add_argument("--test-notif", action="store_true", help="envoyer une alerte de test Vinted et Leboncoin")
     p.add_argument("--telegram-id", action="store_true", help="trouver son chat_id Telegram")
     p.add_argument("--diagnostic", action="store_true", help="vérifier la connexion à Vinted")
     p.add_argument("-v", "--verbeux", action="store_true")
