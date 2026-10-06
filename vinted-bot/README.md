@@ -124,6 +124,17 @@ la table `affaires` du fichier `vinted_bot.db`.
   son site. Utilise ce bot pour un usage personnel et raisonnable. Côté fiscal, l'achat-revente
   régulier dans un but lucratif est une activité commerciale à déclarer (micro-entreprise).
 
+## En cas de problème
+
+```bash
+python -m vinted_bot --diagnostic
+```
+
+Cette commande teste la connexion à Vinted, la lecture des annonces et celle d'un profil
+vendeur. Elle enregistre la réponse brute dans `diagnostic.json`, sans ton jeton de session.
+Vinted modifie son API sans prévenir : en septembre 2026, le catalogue est passé sur
+`api.vinted.fr/svc-catalogue/items`. Si quelque chose casse, c'est par là qu'il faut regarder.
+
 ## Tests
 
 ```bash

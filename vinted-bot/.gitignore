@@ -2,3 +2,4 @@ config.toml
 *.db
 __pycache__/
 .venv/
+diagnostic.json

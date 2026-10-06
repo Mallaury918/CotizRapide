@@ -5,9 +5,11 @@ Usage :
     python -m vinted_bot --une-fois       # un seul passage
     python -m vinted_bot --test-notif     # envoie une alerte de test
     python -m vinted_bot --telegram-id    # affiche ton chat_id Telegram
+    python -m vinted_bot --diagnostic     # vérifie la connexion à Vinted
 """
 
 import argparse
+import json
 import logging
 import random
 import sys
@@ -16,7 +18,7 @@ import tomllib
 
 import requests
 
-from .analyse import Affaire, Annonce, Profil, criteres_pour, evaluer, normaliser
+from .analyse import Affaire, Annonce, Profil, profil_depuis_api, criteres_pour, evaluer, normaliser
 from .client import VintedClient, VintedErreur, params_depuis_url
 from .flux import Flux
 from .notifications import Notificateur
@@ -160,12 +162,56 @@ def telegram_id(conf):
         print(f"telegram_chat_id = \"{cid}\"   ({nom})")
 
 
+def diagnostic(client):
+    """Teste chaque étape de la connexion à Vinted et garde la réponse brute dans un fichier."""
+    rapport = {}
+
+    def etape(nom, fonction):
+        try:
+            resultat = fonction()
+            print(f"✅ {nom}")
+            return resultat
+        except Exception as e:
+            print(f"❌ {nom} : {e}")
+            rapport[nom] = str(e)
+            return None
+
+    if etape("Connexion au site", client._nouvelle_session) is None and client.session is None:
+        return
+    print(f"   cookies reçus : {', '.join(sorted(client.session.cookies.keys()))}")
+    print(f"   identifiant anonyme : {'oui' if 'X-Anon-Id' in client.entetes_api else 'non'}"
+          f" · jeton CSRF : {'oui' if 'X-Csrf-Token' in client.entetes_api else 'non'}")
+    brut = etape("Lecture des nouvelles annonces", lambda: client.requete(
+        client.api + "/svc-catalogue/items",
+        {"order": "newest_first", "page": 1, "per_page": 5, "currency": "EUR", "time": int(time.time())}))
+    if brut:
+        rapport["catalogue"] = brut
+        items = brut.get("items") or (brut.get("data") or {}).get("items") or []
+        print(f"   clés de la réponse : {', '.join(brut.keys())} · {len(items)} annonce(s)")
+        if items:
+            print(f"   champs d'une annonce : {', '.join(items[0].keys())}")
+            a = normaliser(items[0])
+            print(f"   lue comme : {a}")
+            if a and a.vendeur_id:
+                user = etape("Lecture d'un profil vendeur", lambda: client.utilisateur(a.vendeur_id))
+                if user:
+                    rapport["profil"] = {k: user.get(k) for k in (
+                        "given_item_count", "feedback_count", "feedback_reputation",
+                        "positive_feedback_count", "item_count")}
+                    print(f"   champs du profil : {', '.join(list(user.keys())[:40])}")
+                    print(f"   lu comme : {profil_depuis_api(user)}")
+    with open("diagnostic.json", "w", encoding="utf-8") as f:
+        json.dump(rapport, f, ensure_ascii=False, indent=2)
+    print("\nRésultat complet enregistré dans diagnostic.json")
+
+
 def main():
     p = argparse.ArgumentParser(description="Veille des bonnes affaires Vinted")
     p.add_argument("-c", "--config", default="config.toml")
     p.add_argument("--une-fois", action="store_true", help="un seul passage puis quitter")
     p.add_argument("--test-notif", action="store_true", help="envoyer une alerte de test")
     p.add_argument("--telegram-id", action="store_true", help="trouver son chat_id Telegram")
+    p.add_argument("--diagnostic", action="store_true", help="vérifier la connexion à Vinted")
     p.add_argument("-v", "--verbeux", action="store_true")
     args = p.parse_args()
 
@@ -181,6 +227,8 @@ def main():
 
     g = conf.get("general", {})
     client = VintedClient(g.get("domaine", "www.vinted.fr"), tuple(g.get("pause_entre_requetes", [2, 5])))
+    if args.diagnostic:
+        return diagnostic(client)
     stock = Stockage(g.get("base_de_donnees", "vinted_bot.db"))
 
     flux = Flux(conf)

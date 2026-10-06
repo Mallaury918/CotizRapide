@@ -93,8 +93,34 @@ class TestUrl(unittest.TestCase):
     def test_conversion(self):
         p = params_depuis_url("https://www.vinted.fr/catalog?search_text=nike%20dunk"
                               "&brand_ids[]=53&brand_ids[]=14&status_ids[]=6&price_to=50&catalog[]=1")
-        self.assertEqual(p, {"search_text": "nike dunk", "brand_ids": "53,14",
-                             "status_ids": "6", "price_to": "50"})
+        self.assertEqual(p, {"search_text": "nike dunk", "attribute_ids[brand]": "53,14",
+                             "attribute_ids[status]": "6", "price_to": "50"})
+
+    def test_filtres_vides_ignores(self):
+        p = params_depuis_url("https://www.vinted.fr/catalog?search_text=pull&price_from=&catalog_ids=1904")
+        self.assertEqual(p, {"search_text": "pull", "attribute_ids[catalog]": "1904"})
+
+
+class TestFormat2026(unittest.TestCase):
+    """Format de svc-catalogue : marque/taille/état dans item_box, lien relatif."""
+
+    def test_item_box(self):
+        a = normaliser({
+            "id": 42, "title": "Dunk Low Panda", "price": {"amount": "45.0", "currency_code": "EUR"},
+            "url": "/items/42-dunk-low-panda", "photo": {"url": "https://img/1.jpg"},
+            "user": {"id": 9, "login": "zoe"},
+            "item_box": {"first_line": "Nike", "second_line": "42 · Très bon état"},
+        })
+        self.assertEqual((a.marque, a.taille, a.etat), ("Nike", "42", "Très bon état"))
+        self.assertEqual(a.url, "https://www.vinted.fr/items/42-dunk-low-panda")
+        self.assertEqual(a.vendeur_id, 9)
+
+    def test_item_box_sans_taille(self):
+        a = normaliser({"id": 1, "title": "Switch OLED", "price": "250",
+                        "item_box": {"first_line": "Nintendo", "second_line": "Neuf sans étiquette"}})
+        self.assertEqual((a.marque, a.taille, a.etat), ("Nintendo", "", "Neuf sans étiquette"))
+        a = normaliser({"id": 1, "title": "Pull", "price": "10", "item_box": {}})
+        self.assertEqual((a.marque, a.taille, a.etat), ("", "", ""))
 
 
 class TestBoucle(unittest.TestCase):

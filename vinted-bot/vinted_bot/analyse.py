@@ -90,28 +90,57 @@ def _montant(valeur) -> Optional[float]:
         return None
 
 
+ETATS = {"neuf avec etiquette", "neuf sans etiquette", "tres bon etat", "bon etat", "satisfaisant"}
+
+
+def _texte(valeur) -> str:
+    if isinstance(valeur, dict):
+        valeur = valeur.get("title") or valeur.get("name") or ""
+    return (valeur or "").strip() if isinstance(valeur, str) else ""
+
+
+def _details_item_box(item: dict):
+    """Depuis 2026, marque, taille et état sont dans le bloc « item_box » :
+    first_line = marque (si elle diffère du titre), second_line = « taille · état »."""
+    boite = item.get("item_box") or {}
+    marque = _texte(boite.get("first_line"))
+    taille = etat = ""
+    for morceau in _texte(boite.get("second_line")).split("·"):
+        morceau = morceau.strip()
+        if simplifier(morceau) in ETATS:
+            etat = morceau
+        elif morceau and not taille:
+            taille = morceau
+    return marque, taille, etat
+
+
 def normaliser(item: dict) -> Optional[Annonce]:
     prix = _montant(item.get("price"))
-    if prix is None or prix <= 0:
+    if prix is None or prix <= 0 or not item.get("id"):
         return None
     total = _montant(item.get("total_item_price"))
     if total is None or total < prix:
         total = round(prix + PROTECTION_FIXE + prix * PROTECTION_TAUX, 2)
-    photo = item.get("photo") or {}
+    photo = item.get("photo") or (item.get("photos") or [{}])[0] or {}
+    user = item.get("user") or {}
+    marque_box, taille_box, etat_box = _details_item_box(item)
+    url = item.get("url") or f"/items/{item['id']}"
+    if url.startswith("/"):
+        url = "https://www.vinted.fr" + url
     return Annonce(
         id=int(item["id"]),
         titre=(item.get("title") or "").strip(),
         prix=prix,
         prix_total=total,
-        marque=(item.get("brand_title") or "").strip(),
-        taille=(item.get("size_title") or "").strip(),
-        etat=(item.get("status") or "").strip(),
-        url=item.get("url") or f"https://www.vinted.fr/items/{item['id']}",
+        marque=_texte(item.get("brand_title")) or _texte(item.get("brand")) or marque_box,
+        taille=_texte(item.get("size_title")) or taille_box,
+        etat=_texte(item.get("status")) or etat_box,
+        url=url,
         photo=photo.get("url") or "",
-        vendeur=(item.get("user") or {}).get("login", ""),
+        vendeur=user.get("login", ""),
         favoris=int(item.get("favourite_count") or 0),
         catalogue=int(item.get("catalog_id") or 0),
-        vendeur_id=int((item.get("user") or {}).get("id") or 0),
+        vendeur_id=int(user.get("id") or 0),
     )
 
 
