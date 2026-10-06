@@ -1,0 +1,68 @@
+# Copiez ce fichier en config.toml puis adaptez-le.
+# Les secrets peuvent aussi être passés en variables d'environnement :
+# DEALBOT_TELEGRAM_TOKEN, DEALBOT_TELEGRAM_CHAT_ID,
+# DEALBOT_EBAY_CLIENT_ID, DEALBOT_EBAY_CLIENT_SECRET
+
+[general]
+interval_minutes = 15       # fréquence des scans
+market_window_days = 30     # période utilisée pour estimer le prix du marché
+min_samples = 8             # nb d'annonces mini avant de faire confiance à la médiane
+price_drop_alert = 0.30     # alerte si un même article baisse de 30 % d'un coup
+currency = "EUR"
+
+[telegram]
+token = ""     # donné par @BotFather
+chat_id = ""   # votre identifiant (voir README)
+
+[ebay]
+client_id = ""        # clé gratuite : https://developer.ebay.com
+client_secret = ""
+marketplace = "EBAY_FR"
+
+[vinted]
+domain = "www.vinted.fr"
+
+# ---------------------------------------------------------------------------
+# Une section [[watch]] par produit à surveiller.
+# deal_discount  : alerte « sous le marché » dès cette remise (0.30 = -30 %)
+# error_discount : au-delà, c'est signalé comme « erreur de prix probable »
+# must_include   : mots obligatoires dans le titre (évite les hors-sujet)
+# exclude        : mots interdits (une liste par défaut d'accessoires/pièces
+#                  s'ajoute automatiquement, désactivable avec default_exclude = false)
+# reference_price: prix de référence (ex. prix neuf) utilisé tant que le bot
+#                  n'a pas vu assez d'annonces pour calculer le marché
+# ---------------------------------------------------------------------------
+
+[[watch]]
+name = "iPhone 15 Pro 128 Go"
+query = "iphone 15 pro 128"
+sources = ["ebay", "vinted"]
+must_include = ["iphone", "15", "pro"]
+exclude = ["max", "plus"]
+min_price = 250
+max_price = 1200
+reference_price = 700
+deal_discount = 0.25
+
+[[watch]]
+name = "Nintendo Switch OLED"
+query = "nintendo switch oled"
+sources = ["ebay", "vinted"]
+must_include = ["switch", "oled"]
+exclude = ["jeu", "manette", "joy-con", "dock seul"]
+min_price = 100
+max_price = 450
+reference_price = 280
+
+# Sites marchands : collez des pages produit ou des pages catégorie.
+# Le bot lit les prix publiés pour Google (schema.org) et alerte en cas de
+# chute brutale (erreur de prix) ou de passage sous reference_price.
+[[watch]]
+name = "PS5 chez les e-commerçants"
+sources = ["sites"]
+must_include = ["ps5"]
+reference_price = 450
+error_discount = 0.50
+urls = [
+  # "https://www.exemple-boutique.fr/console-ps5-slim.html",
+]
