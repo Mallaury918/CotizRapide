@@ -71,7 +71,7 @@ def traiter_recherche(recherche, conf, client, stock, notif, crit=None) -> int:
         for page in range(1, crit["pages_reference"] + 1):
             annonces = client.annonces(recherche, crit, recentes=False, page=page)
             stock.enregistrer_prix(annonces, nom)
-            if len(annonces) < client.par_page:
+            if not annonces:  # une page incomplète après filtrage n'est pas forcément la dernière
                 break
         stock.echantillon_fait(nom)
 

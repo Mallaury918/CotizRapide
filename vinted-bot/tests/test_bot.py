@@ -360,6 +360,15 @@ class TestLeboncoin(unittest.TestCase):
         self.assertEqual(f["location"], {"shippable": True})   # la ville de l'URL est ignorée
         self.assertEqual(r["sort_by"], "relevance")
 
+    def test_reference_lit_toutes_les_pages(self):
+        # 3 pages de 35, dont une annonce sur cinq sans livraison : il faut lire les 3 pages
+        marche = [ad_lbc(i, 200, expediable="false" if i % 5 == 0 else "true") for i in range(1, 106)]
+        client, stock = FauxLbc(marche, []), Stockage(":memory:")
+        conf = {"leboncoin": {"actif": True, "recherches": [{"nom": "Switch", "mots_cles": "switch"}]}}
+        bot.passage_leboncoin(conf, client, stock, FauxNotif())
+        self.assertEqual(len(stock.historique("Leboncoin · Switch")), 84)
+        self.assertEqual(sum(r["sort_by"] == "relevance" for r in client.requetes), 3)
+
     def test_profil_sans_nombre_de_ventes(self):
         client = FauxLbc([], [], {"u-2": {"feedback": {"overall_score": 0.9, "received_count": 3}}})
         p = client.profil("u-2")
