@@ -45,6 +45,44 @@ prix_min = 2                 # les annonces à 1 € sont souvent des leurres ; 
 benefice_min = 15            # tous les réglages de [criteres] peuvent être remplacés ici
 comparables_min = 10
 
+# ─── Leboncoin : toute la France, annonces avec livraison uniquement ───────────
+# Leboncoin est très protégé contre les robots (DataDome) : le bot y va doucement, une
+# lecture par recherche toutes les ~10 minutes. Garde un petit nombre de recherches
+# précises. Pas de nombre de ventes sur Leboncoin : le filtre vendeur exige à la place
+# autant d'avis que de ventes (5 avis et 4/5 minimum avec les réglages ci-dessus).
+[leboncoin]
+actif = true
+livraison_uniquement = true      # uniquement les annonces expédiables, partout en France
+intervalle_minutes = 10          # ne descends pas en dessous de 5
+pause_entre_requetes = [4.0, 9.0]
+frais_livraison_achat = 6        # colis Leboncoin souvent plus lourds que sur Vinted
+# tous les réglages de [criteres] peuvent être remplacés ici ou dans chaque recherche
+
+# Le plus simple : fais ta recherche sur leboncoin.fr (catégorie, mots, prix…), puis
+# copie l'URL dans "url". La localisation de l'URL est ignorée : toute la France.
+[[leboncoin.recherches]]
+nom = "Switch OLED"
+mots_cles = "switch oled"
+prix_min = 120
+mots_exclus = ["coque", "housse", "étui", "jeu", "jeux", "manette", "boîte seule", "dock seul"]
+remise_min = 0.25
+benefice_min = 30
+
+[[leboncoin.recherches]]
+nom = "AirPods Pro"
+mots_cles = "airpods pro"
+prix_min = 60
+mots_exclus = ["boîtier seul", "boitier seul", "écouteur seul", "ecouteur seul", "coque", "faux"]
+remise_min = 0.3
+benefice_min = 25
+
+[[leboncoin.recherches]]
+nom = "Lego Star Wars"
+mots_cles = "lego star wars"
+prix_min = 30
+mots_exclus = ["incomplet", "figurine seule", "notice seule", "compatible"]
+actif = false                    # mettre à true pour l'activer
+
 [notifications]
 console = true
 # Telegram (recommandé, alertes sur ton téléphone) : voir le README

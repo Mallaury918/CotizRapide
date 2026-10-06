@@ -10,6 +10,23 @@ Il fonctionne de deux façons, utilisables ensemble :
 - **Recherches ciblées** (`[[recherches]]`, facultatives) : il suit de près les articles
   que tu choisis, avec un prix de référence plus fiable.
 
+## Leboncoin (toute la France, livraison uniquement)
+
+Le bot surveille aussi Leboncoin, avec des **recherches ciblées** (section `[leboncoin]` du
+`config.toml`). Il ne garde que les **annonces avec livraison**, partout en France, pour
+acheter sans te déplacer. Il fonctionne comme les recherches Vinted : il apprend les prix
+de chaque recherche, puis t'alerte quand une nouvelle annonce est bien moins chère.
+
+- **Pourquoi pas « tout Leboncoin » ?** Le site mélange voitures, logements, meubles…, et
+  beaucoup d'annonces n'ont pas de marque. Comparer les prix sans recherche précise
+  donnerait surtout de fausses alertes.
+- **Vendeurs :** Leboncoin n'affiche pas de nombre de ventes. Le bot exige à la place
+  autant d'avis (5 avis et une note de 4/5 minimum avec les réglages par défaut).
+- **Prudence :** Leboncoin est protégé par DataDome, très sensible aux robots. Le bot fait
+  une lecture par recherche toutes les ~10 minutes. Garde peu de recherches, et s'il
+  affiche « Leboncoin bloque le bot », arrête-le quelques heures.
+- **curl_cffi est obligatoire** pour Leboncoin : il est dans `requirements.txt`.
+
 ## Le mode « tout Vinted »
 
 Toutes les ~30 secondes, le bot lit les dernières annonces publiées sur tout le site.
@@ -130,7 +147,7 @@ la table `affaires` du fichier `vinted_bot.db`.
 python -m vinted_bot --diagnostic
 ```
 
-Cette commande teste la connexion à Vinted, la lecture des annonces et celle d'un profil
+Cette commande teste la connexion à Vinted (puis à Leboncoin s'il est activé), la lecture des annonces et celle d'un profil
 vendeur. Elle enregistre la réponse brute dans `diagnostic.json`, sans ton jeton de session.
 Vinted modifie son API sans prévenir : en septembre 2026, le catalogue est passé sur
 `api.vinted.fr/svc-catalogue/items`. Si quelque chose casse, c'est par là qu'il faut regarder.

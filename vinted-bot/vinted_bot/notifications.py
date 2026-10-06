@@ -17,6 +17,11 @@ def note(x: float) -> str:
     return f"{x:.1f}".replace(".", ",")
 
 
+def resume_vendeur(nom: str, p) -> str:
+    ventes = f"{p.ventes} vente(s) · " if p.ventes_connues else ""
+    return f"{nom} · {ventes}⭐ {note(p.note)} ({p.avis} avis)"
+
+
 def message(aff, recherche: str) -> str:
     a = aff.annonce
     lignes = [
@@ -30,8 +35,7 @@ def message(aff, recherche: str) -> str:
     if details:
         lignes.append(f"🏷️ {html.escape(details)} · ❤️ {a.favoris}")
     if aff.profil:
-        p = aff.profil
-        lignes.append(f"👤 {html.escape(a.vendeur)} · {p.ventes} vente(s) · ⭐ {note(p.note)} ({p.avis} avis)")
+        lignes.append(f"👤 {html.escape(resume_vendeur(a.vendeur, aff.profil))}")
     if aff.suspect:
         lignes.append("⚠️ <i>Prix anormalement bas : vérifie bien l'annonce (arnaque ? pièce manquante ?)</i>")
     lignes.append(f"🔎 {html.escape(recherche)}")
@@ -89,9 +93,7 @@ class Notificateur:
                                + (" · ⚠️ prix suspect" if aff.suspect else "")},
         }
         if aff.profil:
-            p = aff.profil
-            embed["fields"].append({"name": "Vendeur", "value":
-                                    f"{a.vendeur} · {p.ventes} vente(s) · ⭐ {note(p.note)} ({p.avis} avis)"})
+            embed["fields"].append({"name": "Vendeur", "value": resume_vendeur(a.vendeur, aff.profil)})
         if a.photo:
             embed["thumbnail"] = {"url": a.photo}
         self._post(self.discord, {"embeds": [embed]})

@@ -11,6 +11,8 @@ import re
 import time
 from urllib.parse import parse_qs, urlparse
 
+from .analyse import Profil, normaliser, profil_depuis_api
+
 log = logging.getLogger(__name__)
 
 try:  # curl_cffi imite l'empreinte TLS de Chrome : beaucoup moins de blocages
@@ -35,8 +37,11 @@ _FILTRES = {
 _CSRF = re.compile(r'CSRF_TOKEN\\?"?\s*[:=]\s*\\?"([0-9A-Za-z_-]{16,})')
 
 
-class VintedErreur(Exception):
-    pass
+class ErreurSite(Exception):
+    """Erreur renvoyée par Vinted ou Leboncoin (blocage, réponse inattendue…)."""
+
+
+VintedErreur = ErreurSite
 
 
 def params_depuis_url(url: str) -> dict:
@@ -53,7 +58,22 @@ def params_depuis_url(url: str) -> dict:
     return params
 
 
+def params_pour(recherche: dict, crit: dict) -> dict:
+    params = params_depuis_url(recherche["url"]) if recherche.get("url") else {}
+    if recherche.get("mots_cles"):
+        params["search_text"] = recherche["mots_cles"]
+    if crit["prix_min"]:
+        params["price_from"] = crit["prix_min"]
+    if crit["prix_max"]:
+        params["price_to"] = crit["prix_max"]
+    params.setdefault("currency", "EUR")
+    return params
+
+
 class VintedClient:
+    site = "vinted"
+    par_page = 96
+
     def __init__(self, domaine="www.vinted.fr", pause=(2.0, 5.0)):
         hote = domaine.removeprefix("www.")
         self.site = f"https://www.{hote}"
@@ -119,6 +139,15 @@ class VintedClient:
             if str(item.get("url", "")).startswith("/"):
                 item["url"] = self.site + item["url"]
         return items
+
+    def annonces(self, recherche: dict, crit: dict, recentes=True, page=1) -> list:
+        """Annonces d'une recherche ciblée, déjà normalisées."""
+        items = self.rechercher(params_pour(recherche, crit),
+                                ordre="newest_first" if recentes else "relevance", page=page)
+        return [a for a in map(normaliser, items) if a]
+
+    def profil(self, id_) -> Profil:
+        return profil_depuis_api(self.utilisateur(id_))
 
     def utilisateur(self, id_: int) -> dict:
         """Profil public d'un membre (ventes, avis, note…)."""

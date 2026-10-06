@@ -2,9 +2,10 @@ import random
 import unittest
 
 from vinted_bot import __main__ as bot
-from vinted_bot.analyse import CRITERES_DEFAUT, evaluer, normaliser, passe_filtres
-from vinted_bot.client import params_depuis_url
+from vinted_bot.analyse import CRITERES_DEFAUT, evaluer, normaliser, passe_filtres, vendeur_fiable
+from vinted_bot.client import VintedClient, params_depuis_url
 from vinted_bot.flux import Flux, comparables, jetons
+from vinted_bot.leboncoin import LeboncoinClient, normaliser_lbc, requete_recherche
 from vinted_bot.stockage import Stockage
 
 
@@ -18,7 +19,7 @@ def item(id_, prix, titre="Nike Dunk Low Panda", marque="Nike", etat="Très bon 
             "user": {"id": vendeur, "login": f"membre{vendeur}"}, "favourite_count": 2}
 
 
-class ProfilsMixin:
+class ProfilsMixin(VintedClient):
     profils = {}
     profils_lus = 0
 
@@ -278,6 +279,90 @@ class TestFlux(unittest.TestCase):
         stock.nettoyer_flux(10)
         self.assertEqual(stock.taille_flux(), 0)
         self.assertEqual(stock.db.execute("SELECT COUNT(*) FROM flux_jetons").fetchone()[0], 0)
+
+
+def ad_lbc(id_, prix, titre="Nintendo Switch OLED blanche", marque="Nintendo", etat="Très bon état",
+           vendeur="u-1", expediable="true"):
+    return {"list_id": id_, "subject": titre, "price": [int(prix)], "price_cents": int(prix * 100),
+            "url": f"https://www.leboncoin.fr/ad/consoles/{id_}", "category_id": "43",
+            "images": {"urls_large": [f"https://img.leboncoin.fr/{id_}.jpg"]},
+            "owner": {"user_id": vendeur, "type": "private", "name": f"vendeur-{vendeur}"},
+            "counters": {"favorites": 4},
+            "attributes": [{"key": "brand", "value": marque.lower(), "value_label": marque},
+                           {"key": "condition", "value": "tresbonetat", "value_label": etat},
+                           {"key": "shippable", "value": expediable}]}
+
+
+class FauxLbc(LeboncoinClient):
+    def __init__(self, marche, nouvelles, profils=None):
+        self.livraison, self.marche, self.nouvelles = True, marche, nouvelles
+        self.profils, self.requetes = profils or {}, []
+
+    def rechercher(self, requete):
+        self.requetes.append(requete)
+        if requete["sort_by"] == "relevance":
+            debut = requete["offset"]
+            return self.marche[debut: debut + requete["limit"]]
+        return self.nouvelles
+
+    def requete(self, methode, url, json=None):
+        user_id = url.split("/v2/")[1].split("/")[0]
+        return self.profils.get(user_id, {"feedback": {"overall_score": 0.94, "received_count": 12}})
+
+
+class TestLeboncoin(unittest.TestCase):
+    def test_normalisation(self):
+        a = normaliser_lbc(ad_lbc(77, 180.5))
+        self.assertEqual((a.id, a.prix, a.marque, a.etat), (77, 180.5, "Nintendo", "Très bon état"))
+        self.assertEqual((a.vendeur_id, a.vendeur, a.catalogue), ("u-1", "vendeur-u-1", 43))
+        self.assertEqual(a.photo, "https://img.leboncoin.fr/77.jpg")
+        self.assertIsNone(normaliser_lbc({"list_id": 1, "subject": "Don", "price": [0]}))
+
+    def test_requete_livraison_toute_la_france(self):
+        r = requete_recherche({"mots_cles": "switch oled"}, {"prix_min": 100, "prix_max": 300},
+                              recentes=True, page=2, par_page=35, livraison=True)
+        self.assertEqual(r["filters"]["location"], {"shippable": True})
+        self.assertNotIn("locations", r["filters"]["location"])
+        self.assertEqual(r["filters"]["ranges"]["price"], {"min": 100, "max": 300})
+        self.assertEqual(r["filters"]["keywords"], {"text": "switch oled"})
+        self.assertEqual((r["sort_by"], r["sort_order"], r["offset"]), ("time", "desc", 35))
+
+    def test_requete_depuis_url(self):
+        r = requete_recherche({"url": "https://www.leboncoin.fr/recherche?category=43&text=ps5"
+                                      "&locations=Lyon__45.7_4.8_5000&price=200-400&shippable=1"},
+                              {}, recentes=False, page=1, par_page=35, livraison=True)
+        f = r["filters"]
+        self.assertEqual((f["category"], f["keywords"]), ({"id": "43"}, {"text": "ps5"}))
+        self.assertEqual(f["ranges"]["price"], {"min": 200, "max": 400})
+        self.assertEqual(f["location"], {"shippable": True})   # la ville de l'URL est ignorée
+        self.assertEqual(r["sort_by"], "relevance")
+
+    def test_profil_sans_nombre_de_ventes(self):
+        client = FauxLbc([], [], {"u-2": {"feedback": {"overall_score": 0.9, "received_count": 3}}})
+        p = client.profil("u-2")
+        self.assertEqual((p.avis, p.note, p.ventes_connues), (3, 4.5, False))
+        crit = {"vendeur_ventes_min": 5, "vendeur_avis_min": 1, "vendeur_note_min": 4}
+        self.assertFalse(vendeur_fiable(p, crit))   # 3 avis < 5 exigés
+        self.assertTrue(vendeur_fiable(client.profil("u-1"), crit))
+
+    def test_parcours_complet(self):
+        rnd = random.Random(5)
+        marche = [ad_lbc(i, rnd.uniform(200, 260)) for i in range(1, 80)]
+        conf = {"leboncoin": {"actif": True, "recherches": [{"nom": "Switch", "mots_cles": "switch oled"}],
+                              "mots_exclus": ["manette"]}}
+        recherche = conf["leboncoin"]["recherches"][0]
+        stock, notif = Stockage(":memory:"), FauxNotif()
+        client = FauxLbc(marche, marche[:5], {"u-9": {"feedback": {"overall_score": 1, "received_count": 1}}})
+        bot.passage_leboncoin(conf, client, stock, notif)
+        self.assertEqual(notif.recues, [])
+        client.nouvelles = [ad_lbc(901, 95), ad_lbc(902, 90, titre="Manette Switch OLED"),
+                            ad_lbc(903, 90, vendeur="u-9"), ad_lbc(904, 90, expediable="false")]
+        bot.passage_leboncoin(conf, client, stock, notif)
+        self.assertEqual([a.annonce.id for a in notif.recues], [901])
+        self.assertTrue(all(r["filters"]["location"] == {"shippable": True} for r in client.requetes))
+        # Les recherches Vinted et Leboncoin ne partagent pas leur mémoire
+        self.assertTrue(stock.connait_recherche("Leboncoin · Switch"))
+        self.assertFalse(stock.connait_recherche("Switch"))
 
 
 if __name__ == "__main__":

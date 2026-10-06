@@ -77,6 +77,7 @@ class Profil:
     ventes: int
     avis: int
     note: float           # sur 5
+    ventes_connues: bool = True   # Leboncoin n'affiche pas de nombre de ventes
 
 
 def _montant(valeur) -> Optional[float]:
@@ -234,6 +235,9 @@ def profil_depuis_api(user: dict) -> Profil:
 
 
 def vendeur_fiable(p: Profil, crit: dict) -> bool:
+    if not p.ventes_connues:  # sans nombre de ventes, on exige autant d'avis
+        avis_min = max(crit.get("vendeur_avis_min", 0), crit.get("vendeur_ventes_min", 0))
+        return p.avis >= avis_min and p.note >= crit.get("vendeur_note_min", 0)
     return (p.ventes >= crit.get("vendeur_ventes_min", 0)
             and p.avis >= crit.get("vendeur_avis_min", 0)
             and p.note >= crit.get("vendeur_note_min", 0))

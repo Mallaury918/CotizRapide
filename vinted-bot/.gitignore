@@ -3,3 +3,4 @@ config.toml
 __pycache__/
 .venv/
 diagnostic.json
+diagnostic_leboncoin.json
