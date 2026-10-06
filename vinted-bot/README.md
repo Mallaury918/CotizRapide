@@ -20,6 +20,8 @@ de chaque recherche, puis t'alerte quand une nouvelle annonce est bien moins ch�
 - **Pourquoi pas « tout Leboncoin » ?** Le site mélange voitures, logements, meubles…, et
   beaucoup d'annonces n'ont pas de marque. Comparer les prix sans recherche précise
   donnerait surtout de fausses alertes.
+- **Frais réels :** pour chaque annonce, le bot prend les vrais frais acheteur et le mode
+  de livraison le moins cher indiqués par Leboncoin.
 - **Vendeurs :** Leboncoin n'affiche pas de nombre de ventes. Le bot exige à la place
   autant d'avis (5 avis et une note de 4/5 minimum avec les réglages par défaut).
 - **Prudence :** Leboncoin est protégé par DataDome, très sensible aux robots. Le bot fait

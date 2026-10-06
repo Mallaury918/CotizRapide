@@ -60,6 +60,21 @@ def _marque(ad: dict) -> str:
     return marque
 
 
+def _frais_acheteur(ad: dict, prix: float) -> float:
+    """Frais de protection acheteur réels (« buyer_fee », en centimes), sinon estimés."""
+    montant = (ad.get("buyer_fee") or {}).get("amount")
+    if isinstance(montant, (int, float)) and montant >= 0:
+        return montant / 100
+    return PROTECTION_FIXE + prix * PROTECTION_TAUX
+
+
+def _port_le_moins_cher(ad: dict):
+    """Prix du mode de livraison le moins cher (« shipping_fees », en centimes), ou None."""
+    prix = [f.get("price") for f in ad.get("shipping_fees") or []
+            if isinstance(f, dict) and isinstance(f.get("price"), (int, float)) and f["price"] >= 0]
+    return min(prix) / 100 if prix else None
+
+
 def normaliser_lbc(ad: dict):
     """Convertit une annonce Leboncoin au format commun du bot."""
     prix = None
@@ -75,8 +90,7 @@ def normaliser_lbc(ad: dict):
         id=int(ad["list_id"]),
         titre=(ad.get("subject") or "").strip(),
         prix=prix,
-        # Paiement sécurisé : on applique la même estimation de frais que sur Vinted
-        prix_total=round(prix + PROTECTION_FIXE + prix * PROTECTION_TAUX, 2),
+        prix_total=round(prix + _frais_acheteur(ad, prix), 2),
         marque=_marque(ad),
         taille=_attribut(ad, "clothing_tag") or _attribut(ad, "shoe_size"),
         etat=_attribut(ad, "condition"),
@@ -86,6 +100,7 @@ def normaliser_lbc(ad: dict):
         favoris=int((ad.get("counters") or {}).get("favorites") or 0),
         catalogue=int(ad.get("category_id") or 0),
         vendeur_id=owner.get("user_id") or "",
+        livraison=_port_le_moins_cher(ad),
     )
 
 

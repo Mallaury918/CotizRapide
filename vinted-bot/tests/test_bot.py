@@ -318,6 +318,20 @@ class TestLeboncoin(unittest.TestCase):
         self.assertEqual(a.photo, "https://img.leboncoin.fr/77.jpg")
         self.assertIsNone(normaliser_lbc({"list_id": 1, "subject": "Don", "price": [0]}))
 
+    def test_frais_reels(self):
+        ad = ad_lbc(1, 80)
+        ad["buyer_fee"] = {"amount": 199}
+        ad["shipping_fees"] = [{"shipping_type": "colissimo", "price": 590},
+                               {"shipping_type": "mondial_relay", "price": 249}]
+        a = normaliser_lbc(ad)
+        self.assertEqual((a.prix_total, a.livraison), (81.99, 2.49))
+        hist = [(i, 160.0, "Nintendo", "Très bon état") for i in range(2, 40)]
+        aff = evaluer(a, hist, {**CRITERES_DEFAUT, "frais_livraison_achat": 6})
+        self.assertEqual(aff.cout_total, 84.48)          # le vrai port remplace l'estimation
+        # Sans frais indiqués : estimation de la protection, port fixé par la configuration
+        b = normaliser_lbc(ad_lbc(2, 80))
+        self.assertEqual((b.prix_total, b.livraison), (84.7, None))
+
     def test_marque_reelle_et_pas_leboncoin(self):
         ad = ad_lbc(1, 80)
         ad["brand"] = "leboncoin"

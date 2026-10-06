@@ -57,6 +57,7 @@ class Annonce:
     favoris: int
     catalogue: int = 0   # catégorie Vinted, si l'API la fournit
     vendeur_id: int = 0
+    livraison: Optional[float] = None   # prix réel du port s'il est connu (Leboncoin)
 
 
 @dataclass
@@ -213,7 +214,8 @@ def evaluer(a: Annonce, historique: list, crit: dict) -> Optional[Affaire]:
     if ref is None:
         return None
     reference, nb, groupe = ref
-    cout = a.prix_total + crit.get("frais_livraison_achat", 0)
+    port = a.livraison if a.livraison is not None else crit.get("frais_livraison_achat", 0)
+    cout = a.prix_total + port
     remise = 1 - cout / reference
     revente_nette = reference * (1 - crit.get("commission_revente", 0)) - crit.get("frais_envoi_revente", 0)
     benefice = revente_nette - cout

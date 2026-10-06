@@ -55,7 +55,8 @@ actif = true
 livraison_uniquement = true      # uniquement les annonces expédiables, partout en France
 intervalle_minutes = 10          # ne descends pas en dessous de 5
 pause_entre_requetes = [4.0, 9.0]
-frais_livraison_achat = 6        # colis Leboncoin souvent plus lourds que sur Vinted
+frais_livraison_achat = 6        # utilisé seulement si l'annonce n'indique pas son port :
+                                 # sinon le bot prend les vrais frais (protection + port le moins cher)
 # tous les réglages de [criteres] peuvent être remplacés ici ou dans chaque recherche
 
 # Le plus simple : fais ta recherche sur leboncoin.fr (catégorie, mots, prix…), puis
