@@ -1,0 +1,341 @@
+# Sites scannés par le mode « catalogue » : enseignes françaises reconnues
+# (ou leur boutique officielle). Aucune plateforme de particuliers ici.
+#
+# kind = "enseigne"    : le site vend lui-même ses produits.
+# kind = "marketplace" : le site accueille aussi des revendeurs tiers ;
+#                        `sellers` liste les seuls vendeurs acceptés (en général
+#                        l'enseigne elle-même). Une offre d'un autre vendeur est ignorée.
+# path_prefix          : ne garder que les pages de cette section (sites multi-pays).
+# start_urls           : pages de départ en plus du plan du site (sitemap).
+# enabled = false      : désactivé par défaut (voir `note`).
+#
+# Pour ajouter un site : copiez un bloc. Pour en couper un sans modifier ce
+# fichier : `disabled_sites = ["fnac.com"]` dans config.toml.
+
+# ---------------------------------------------------------------- High-tech
+[[site]]
+name = "Fnac"
+domain = "www.fnac.com"
+category = "high-tech, culture"
+kind = "marketplace"
+sellers = ["Fnac"]
+
+[[site]]
+name = "Darty"
+domain = "www.darty.com"
+category = "électroménager, high-tech"
+kind = "marketplace"
+sellers = ["Darty"]
+
+[[site]]
+name = "Boulanger"
+domain = "www.boulanger.com"
+category = "électroménager, high-tech"
+kind = "marketplace"
+sellers = ["Boulanger"]
+
+[[site]]
+name = "Cdiscount"
+domain = "www.cdiscount.com"
+category = "généraliste"
+kind = "marketplace"
+sellers = ["Cdiscount"]
+note = "Seules les offres « Vendu et expédié par Cdiscount » sont gardées."
+
+[[site]]
+name = "LDLC"
+domain = "www.ldlc.com"
+category = "informatique"
+kind = "enseigne"
+
+[[site]]
+name = "Materiel.net"
+domain = "www.materiel.net"
+category = "informatique"
+kind = "enseigne"
+
+[[site]]
+name = "Top Achat"
+domain = "www.topachat.com"
+category = "informatique"
+kind = "enseigne"
+
+[[site]]
+name = "Grosbill"
+domain = "www.grosbill.com"
+category = "informatique"
+kind = "enseigne"
+
+[[site]]
+name = "Cybertek"
+domain = "www.cybertek.fr"
+category = "informatique"
+kind = "enseigne"
+
+[[site]]
+name = "Rue du Commerce"
+domain = "www.rueducommerce.fr"
+category = "informatique, généraliste"
+kind = "marketplace"
+sellers = ["Rue du Commerce"]
+
+[[site]]
+name = "Electro Dépôt"
+domain = "www.electrodepot.fr"
+category = "électroménager, high-tech"
+kind = "enseigne"
+
+[[site]]
+name = "Ubaldi"
+domain = "www.ubaldi.com"
+category = "électroménager, high-tech"
+kind = "enseigne"
+
+[[site]]
+name = "Son-Vidéo.com"
+domain = "www.son-video.com"
+category = "hi-fi, home-cinéma"
+kind = "enseigne"
+
+[[site]]
+name = "Apple (reconditionné officiel)"
+domain = "www.apple.com"
+category = "high-tech"
+kind = "enseigne"
+path_prefix = "/fr/shop/"
+start_urls = ["https://www.apple.com/fr/shop/refurbished"]
+
+[[site]]
+name = "Samsung France"
+domain = "www.samsung.com"
+category = "high-tech"
+kind = "enseigne"
+path_prefix = "/fr/"
+
+[[site]]
+name = "Back Market"
+domain = "www.backmarket.fr"
+category = "reconditionné"
+kind = "marketplace"
+note = "Reconditionneurs professionnels sélectionnés et notés par Back Market, garantie 1 an minimum."
+
+[[site]]
+name = "Micromania"
+domain = "www.micromania.fr"
+category = "jeux vidéo"
+kind = "enseigne"
+
+[[site]]
+name = "Amazon"
+domain = "www.amazon.fr"
+category = "généraliste"
+kind = "marketplace"
+sellers = ["Amazon"]
+enabled = false
+note = "Bloque quasi systématiquement les robots ; activez-le seulement pour essayer."
+
+# ------------------------------------------------------- Grandes surfaces
+[[site]]
+name = "Auchan"
+domain = "www.auchan.fr"
+category = "généraliste"
+kind = "marketplace"
+sellers = ["Auchan"]
+
+[[site]]
+name = "Carrefour"
+domain = "www.carrefour.fr"
+category = "généraliste"
+kind = "marketplace"
+sellers = ["Carrefour"]
+
+[[site]]
+name = "E.Leclerc"
+domain = "www.e.leclerc"
+category = "généraliste"
+kind = "marketplace"
+sellers = ["Leclerc"]
+
+# ------------------------------------------------------- Maison, bricolage
+[[site]]
+name = "IKEA"
+domain = "www.ikea.com"
+category = "maison"
+kind = "enseigne"
+path_prefix = "/fr/fr/"
+
+[[site]]
+name = "Conforama"
+domain = "www.conforama.fr"
+category = "maison, électroménager"
+kind = "marketplace"
+sellers = ["Conforama"]
+
+[[site]]
+name = "BUT"
+domain = "www.but.fr"
+category = "maison, électroménager"
+kind = "marketplace"
+sellers = ["BUT"]
+
+[[site]]
+name = "Maisons du Monde"
+domain = "www.maisonsdumonde.com"
+category = "maison"
+kind = "enseigne"
+path_prefix = "/FR/fr/"
+
+[[site]]
+name = "Leroy Merlin"
+domain = "www.leroymerlin.fr"
+category = "bricolage"
+kind = "marketplace"
+sellers = ["Leroy Merlin"]
+
+[[site]]
+name = "Castorama"
+domain = "www.castorama.fr"
+category = "bricolage"
+kind = "enseigne"
+
+[[site]]
+name = "Brico Dépôt"
+domain = "www.bricodepot.fr"
+category = "bricolage"
+kind = "enseigne"
+
+[[site]]
+name = "ManoMano"
+domain = "www.manomano.fr"
+category = "bricolage, jardin"
+kind = "marketplace"
+note = "Marketplace réservée aux vendeurs professionnels validés par ManoMano."
+
+[[site]]
+name = "Norauto"
+domain = "www.norauto.fr"
+category = "auto"
+kind = "enseigne"
+
+[[site]]
+name = "Feu Vert"
+domain = "www.feuvert.fr"
+category = "auto"
+kind = "enseigne"
+
+# ------------------------------------------------------- Sport, mode
+[[site]]
+name = "Decathlon"
+domain = "www.decathlon.fr"
+category = "sport"
+kind = "marketplace"
+sellers = ["Decathlon"]
+
+[[site]]
+name = "Intersport"
+domain = "www.intersport.fr"
+category = "sport"
+kind = "enseigne"
+
+[[site]]
+name = "Go Sport"
+domain = "www.go-sport.com"
+category = "sport"
+kind = "enseigne"
+
+[[site]]
+name = "Courir"
+domain = "www.courir.com"
+category = "sneakers"
+kind = "enseigne"
+path_prefix = "/fr/"
+
+[[site]]
+name = "Foot Locker"
+domain = "www.footlocker.fr"
+category = "sneakers"
+kind = "enseigne"
+
+[[site]]
+name = "JD Sports"
+domain = "www.jdsports.fr"
+category = "sneakers"
+kind = "enseigne"
+
+[[site]]
+name = "Nike"
+domain = "www.nike.com"
+category = "sneakers, sport"
+kind = "enseigne"
+path_prefix = "/fr/"
+
+[[site]]
+name = "adidas"
+domain = "www.adidas.fr"
+category = "sneakers, sport"
+kind = "enseigne"
+
+[[site]]
+name = "Zalando"
+domain = "www.zalando.fr"
+category = "mode"
+kind = "marketplace"
+note = "Partenaires sélectionnés par Zalando, retours gérés par Zalando."
+
+[[site]]
+name = "La Redoute"
+domain = "www.laredoute.fr"
+category = "mode, maison"
+kind = "marketplace"
+sellers = ["La Redoute"]
+
+[[site]]
+name = "Kiabi"
+domain = "www.kiabi.com"
+category = "mode"
+kind = "enseigne"
+
+# ------------------------------------------------------- Beauté
+[[site]]
+name = "Sephora"
+domain = "www.sephora.fr"
+category = "beauté"
+kind = "enseigne"
+
+[[site]]
+name = "Nocibé"
+domain = "www.nocibe.fr"
+category = "beauté"
+kind = "enseigne"
+
+[[site]]
+name = "Marionnaud"
+domain = "www.marionnaud.fr"
+category = "beauté"
+kind = "enseigne"
+
+# ------------------------------------------------------- Culture, jouets
+[[site]]
+name = "Cultura"
+domain = "www.cultura.com"
+category = "culture, loisirs"
+kind = "marketplace"
+sellers = ["Cultura"]
+
+[[site]]
+name = "King Jouet"
+domain = "www.king-jouet.com"
+category = "jouets"
+kind = "enseigne"
+
+[[site]]
+name = "JouéClub"
+domain = "www.joueclub.fr"
+category = "jouets"
+kind = "enseigne"
+
+[[site]]
+name = "Nature & Découvertes"
+domain = "www.natureetdecouvertes.com"
+category = "cadeaux, loisirs"
+kind = "enseigne"

@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .analyzer import analyze
+from .analyzer import analyze, analyze_catalog
+from .catalog.crawler import Crawler, SiteResult, SiteState, source_name
 from .config import Settings
 from .http import Session
 from .notifier import ConsoleNotifier, TelegramNotifier
 from .sources import build_sources
 from .storage import Store
+from .trust import untrusted_reason
+
+BLOCK_BASE = 6 * 3600  # pause après un blocage : 6 h, puis 12 h, 24 h… (max 7 jours)
+BLOCK_MAX = 7 * 86400
 
 
 def make_notifiers(settings: Settings) -> list:
@@ -18,7 +24,23 @@ def make_notifiers(settings: Settings) -> list:
     return notifiers
 
 
-def run_once(settings: Settings, store: Store, sources: dict, notifiers: list) -> int:
+def deliver(deals, store: Store, notifiers: list) -> int:
+    sent = 0
+    for deal in deals:
+        delivered = False
+        for n in notifiers:
+            try:
+                n.send(deal)
+                delivered = True
+            except Exception as e:
+                print(f"Envoi impossible via {type(n).__name__} : {e}")
+        if delivered:
+            store.mark_alerted(deal.listing.key, deal.listing.total)
+            sent += 1
+    return sent
+
+
+def run_watches(settings: Settings, store: Store, sources: dict, notifiers: list) -> int:
     sent = 0
     for watch in settings.watches:
         listings = []
@@ -33,30 +55,88 @@ def run_once(settings: Settings, store: Store, sources: dict, notifiers: list) -
                 listings += found
             except Exception as e:  # une source en panne ne doit pas arrêter le bot
                 print(f"[{watch.name}] {name} : erreur {e}")
+        trusted = []
         for deal in analyze(watch, listings, store, settings):
-            delivered = False
-            for n in notifiers:
-                try:
-                    n.send(deal)
-                    delivered = True
-                except Exception as e:
-                    print(f"Envoi impossible via {type(n).__name__} : {e}")
-            if delivered:
+            source = sources.get(deal.listing.source)
+            if source is not None:
+                source.verify_seller(deal.listing)
+            reason = untrusted_reason(deal.listing, settings.trust)
+            if reason:
+                print(f"[{watch.name}] ignorée ({reason}) : {deal.listing.url}")
+                # Mémorisée pour ne pas revérifier ce vendeur à chaque passe.
                 store.mark_alerted(deal.listing.key, deal.listing.total)
-                sent += 1
+            else:
+                trusted.append(deal)
+        sent += deliver(trusted, store, notifiers)
         store.commit()
     return sent
 
 
-def run(settings: Settings, loop: bool = True) -> None:
+def _apply_site_result(store: Store, r: SiteResult, now: float) -> None:
+    domain = r.site.domain
+    if r.pages is not None:
+        store.save_pages(domain, r.pages)
+        store.update_site(domain, sitemap_at=now)
+    store.mark_checked(domain, r.checked, now)
+    row = store.site_row(domain)
+    if r.blocked:
+        failures = row["failures"] + 1
+        pause = min(BLOCK_BASE * 2 ** (failures - 1), BLOCK_MAX)
+        store.update_site(domain, mode=r.mode, failures=failures, blocked_until=now + pause,
+                          last_error=r.error)
+    else:
+        fields = {"mode": r.mode, "cursor": r.cursor, "last_error": r.error}
+        if r.listings:
+            fields.update(failures=0, last_ok=now, products_seen=row["products_seen"] + len(r.listings))
+        store.update_site(domain, **fields)
+
+
+def run_catalog(settings: Settings, store: Store, notifiers: list,
+                session_factory=lambda: Session(min_delay=1.5)) -> int:
+    cat = settings.catalog
+    if not cat.enabled or not cat.sites:
+        return 0
+    now = time.time()
+    by_source = {source_name(s): s for s in cat.sites}
+    jobs = []
+    for site in cat.sites:
+        row = store.site_row(site.domain)
+        if row["blocked_until"] > now:
+            continue
+        state = SiteState(mode=row["mode"], cursor=row["cursor"], sitemap_at=row["sitemap_at"])
+        to_check = store.pages_to_check(site.domain, cat.pages_per_site)
+        jobs.append((Crawler(site, state, cat.pages_per_site, session_factory()), to_check))
+    store.commit()
+
+    sent = 0
+    # Un thread par site : chaque site garde son propre rythme (1 requête / 1,5 s).
+    with ThreadPoolExecutor(max_workers=max(1, cat.workers)) as pool:
+        futures = [pool.submit(c.run, urls) for c, urls in jobs]
+        for fut in as_completed(futures):
+            r = fut.result()
+            _apply_site_result(store, r, time.time())
+            status = f"bloqué ({r.error})" if r.blocked else (r.error or "ok")
+            print(f"[catalogue] {r.site.name} : {len(r.listings)} produits, "
+                  f"{r.requests} pages ({r.mode or '?'}) — {status}")
+            deals = analyze_catalog(r.listings, store, settings, by_source)
+            sent += deliver(deals, store, notifiers)
+            store.commit()
+    return sent
+
+
+def run(settings: Settings, loop: bool = True, catalog: bool = True, watches: bool = True) -> None:
     store = Store(settings.database)
     sources = build_sources(settings, Session())
     notifiers = make_notifiers(settings)
     try:
         while True:
             started = time.strftime("%H:%M:%S")
+            n = 0
             try:
-                n = run_once(settings, store, sources, notifiers)
+                if watches:
+                    n += run_watches(settings, store, sources, notifiers)
+                if catalog:
+                    n += run_catalog(settings, store, notifiers)
                 print(f"[{started}] passe terminée : {n} alerte(s) envoyée(s)")
             except Exception:
                 traceback.print_exc()

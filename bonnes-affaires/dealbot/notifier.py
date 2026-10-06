@@ -26,6 +26,14 @@ def format_deal(d: Deal, rich: bool = True) -> str:
     ]
     if l.condition:
         lines.append(f"État : {esc(l.condition)}")
+    if l.seller:
+        detail = []
+        if l.seller_rating is not None:
+            detail.append(f"{l.seller_rating:.1f}/5")
+        if l.seller_reviews is not None:
+            detail.append(f"{l.seller_reviews} avis")
+        lines.append(f"Vendeur : {esc(l.seller)}" + (f" ({', '.join(detail)})" if detail else "")
+                     + (" ✅" if l.seller_checked or detail else ""))
     lines += [f"⚠️ {esc(w)}" for w in d.warnings]
     lines.append(f'<a href="{esc(l.url)}">Voir l\'annonce</a>' if rich else l.url)
     return "\n".join(lines)

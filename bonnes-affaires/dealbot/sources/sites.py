@@ -8,6 +8,7 @@ from html.parser import HTMLParser
 from ..config import Watch
 from ..http import HttpError, Session
 from ..models import Listing
+from ..textutil import normalize
 from .base import Source
 
 
@@ -106,12 +107,37 @@ def _types(node: dict) -> set[str]:
     return {x.lower() for x in (t if isinstance(t, list) else [t]) if isinstance(x, str)}
 
 
-def _offer(offers) -> tuple[float, str, bool] | None:
-    """Renvoie (prix, devise, en_stock) de la meilleure offre disponible."""
+def _seller_name(offer: dict) -> str:
+    seller = offer.get("seller") or offer.get("offeredBy") or ""
+    if isinstance(seller, list):
+        seller = seller[0] if seller else ""
+    if isinstance(seller, dict):
+        seller = seller.get("name", "")
+    return str(seller).strip()
+
+
+def seller_allowed(seller: str, allowed: list[str]) -> bool:
+    if not allowed or not seller:
+        return True  # pas de filtre, ou vendeur non publié par le site
+    s = normalize(seller)
+    return any(normalize(a) in s for a in allowed)
+
+
+def _offer(offers, sellers: list[str] | None = None) -> tuple[float, str, bool, str] | None:
+    """Renvoie (prix, devise, en_stock, vendeur) de la meilleure offre acceptable."""
     best = None
     for o in offers if isinstance(offers, list) else [offers]:
         if not isinstance(o, dict):
             continue
+        if o.get("@type") == "AggregateOffer" and isinstance(o.get("offers"), list) and sellers:
+            # Le détail des offres permet de filtrer les revendeurs.
+            sub = _offer(o["offers"], sellers)
+            if sub and (best is None or (sub[2], -sub[0]) > (best[2], -best[0])):
+                best = sub
+            continue
+        seller = _seller_name(o)
+        if not seller_allowed(seller, sellers or []):
+            continue  # revendeur tiers non autorisé sur cette marketplace
         price = parse_price(o.get("price"))
         if price is None:
             price = parse_price(o.get("lowPrice"))
@@ -121,49 +147,64 @@ def _offer(offers) -> tuple[float, str, bool] | None:
             continue
         availability = str(o.get("availability", "")).lower()
         in_stock = not any(w in availability for w in ("outofstock", "soldout", "discontinued"))
-        cand = (price, o.get("priceCurrency") or "EUR", in_stock)
+        cand = (price, o.get("priceCurrency") or "EUR", in_stock, seller)
         if best is None or (in_stock, -price) > (best[2], -best[0]):
             best = cand
     return best
 
 
-def extract_listings(page: str, page_url: str) -> list[Listing]:
+def _gtin(node: dict) -> str:
+    for k in ("gtin13", "gtin", "gtin12", "gtin14", "gtin8", "ean", "isbn"):
+        v = re.sub(r"\D", "", str(node.get(k) or ""))
+        if 8 <= len(v) <= 14:
+            return v.zfill(13) if len(v) == 12 else v  # UPC-A -> EAN-13
+    return ""
+
+
+def extract_listings(page: str, page_url: str, sellers: list[str] | None = None,
+                     source: str = "") -> list[Listing]:
     parser = _Collector()
     parser.feed(page)
     host = urllib.parse.urlparse(page_url).netloc.removeprefix("www.")
+    source = source or f"site:{host}"
     found: dict[str, Listing] = {}
+    saw_product = False
 
     for raw in parser.blocks:
         try:
-            data = json.loads(raw.strip())
+            data = json.loads(raw.strip(), strict=False)
         except json.JSONDecodeError:
             continue
         for node in _walk(data):
             if "product" not in _types(node) or "offers" not in node:
                 continue
-            offer = _offer(node["offers"])
+            saw_product = True
+            offer = _offer(node["offers"], sellers)
             if not offer or not offer[2]:  # rupture de stock : prix non achetable
                 continue
-            price, currency, _ = offer
+            price, currency, _, seller = offer
             url = urllib.parse.urljoin(page_url, node.get("url") or page_url)
-            item_id = str(node.get("sku") or node.get("gtin13") or node.get("productID") or url)
+            gtin = _gtin(node)
+            item_id = str(node.get("sku") or gtin or node.get("productID") or url)
             image = node.get("image")
             if isinstance(image, list):
                 image = image[0] if image else ""
             if isinstance(image, dict):
                 image = image.get("url", "")
             found.setdefault(item_id, Listing(
-                source=f"site:{host}", item_id=item_id, title=str(node.get("name", "")).strip(),
+                source=source, item_id=item_id, title=str(node.get("name", "")).strip(),
                 price=price, currency=currency, url=url, image=str(image or ""),
+                gtin=gtin, seller=seller, seller_checked=bool(seller and sellers),
             ))
 
-    # Repli : balises meta Open Graph (pages produit sans JSON-LD).
-    if not found:
+    # Repli : balises meta Open Graph (pages produit sans JSON-LD). Jamais sur une
+    # marketplace filtrée : on ne saurait pas qui vend.
+    if not saw_product and not sellers:
         price = parse_price(parser.meta.get("product:price:amount") or parser.meta.get("og:price:amount"))
         title = parser.meta.get("og:title", "")
         if price and title:
             found[page_url] = Listing(
-                source=f"site:{host}", item_id=page_url, title=title, price=price,
+                source=source, item_id=page_url, title=title, price=price,
                 currency=(parser.meta.get("product:price:currency")
                           or parser.meta.get("og:price:currency") or "EUR"),
                 url=page_url, image=parser.meta.get("og:image", ""),

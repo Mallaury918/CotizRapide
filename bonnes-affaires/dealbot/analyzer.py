@@ -96,3 +96,67 @@ def analyze(watch: Watch, listings: list[Listing], store: Store, settings: Setti
 
     deals.sort(key=lambda d: d.discount, reverse=True)
     return deals
+
+
+CATALOG_WATCH = "catalogue"
+
+
+def analyze_catalog(listings: list[Listing], store: Store, settings: Settings,
+                    sites: dict | None = None, now: float | None = None) -> list[Deal]:
+    """Mode catalogue : aucun produit à configurer, deux signaux automatiques.
+
+    1. Le même produit (même code-barres) est nettement moins cher que la médiane
+       de ses prix sur les autres sites fiables.
+    2. Le prix d'un produit chute brutalement depuis le dernier passage.
+    """
+    now = now or time.time()
+    cat = settings.catalog
+    sites = sites or {}
+    kept = [l for l in listings
+            if l.title and l.currency == settings.currency and l.total >= cat.min_price]
+
+    previous = {l.key: store.previous_price(l.key) for l in kept}
+    for l in kept:
+        store.record(CATALOG_WATCH, l, now)
+
+    since = now - settings.market_window_days * 86400
+    deals: list[Deal] = []
+    for l in kept:
+        candidates = []
+        if l.gtin:
+            others = store.gtin_prices(l.gtin, l.source, since)
+            if len(others) >= cat.min_other_sites:
+                ref = statistics.median(others.values())
+                discount = 1 - l.total / ref
+                if discount >= cat.deal_discount:
+                    kind = "erreur_prix" if discount >= cat.error_discount else "sous_marche"
+                    cheapest = min(others, key=others.get)
+                    candidates.append(Deal(
+                        l, CATALOG_WATCH, kind, ref, discount,
+                        f"{discount:.0%} moins cher que sur {len(others)} autres sites "
+                        f"(médiane {ref:.2f} €, le moins cher ailleurs : "
+                        f"{cheapest.removeprefix('site:')} à {others[cheapest]:.2f} €)"))
+        before = previous.get(l.key)
+        if before and l.total < before:
+            drop = 1 - l.total / before
+            if drop >= settings.price_drop_alert:
+                kind = "erreur_prix" if drop >= cat.error_discount else "baisse_prix"
+                candidates.append(Deal(l, CATALOG_WATCH, kind, before, drop,
+                                       f"Prix passé de {before:.2f} € à {l.total:.2f} € (-{drop:.0%})"))
+        if not candidates or store.already_alerted(l.key, l.total):
+            continue
+        deal = max(candidates, key=lambda d: d.discount)
+        site = sites.get(l.source)
+        if site is not None:
+            if site.sellers and not l.seller:
+                deal.warnings.append("Le site n'indique pas le vendeur : vérifiez que c'est bien "
+                                     f"« vendu par {site.sellers[0]} » avant d'acheter.")
+            if site.note:
+                deal.warnings.append(site.note)
+        if deal.kind == "erreur_prix":
+            deal.warnings.append("Erreur de prix : commandez vite, le marchand peut corriger "
+                                 "le prix ou annuler la commande.")
+        deals.append(deal)
+
+    deals.sort(key=lambda d: d.discount, reverse=True)
+    return deals

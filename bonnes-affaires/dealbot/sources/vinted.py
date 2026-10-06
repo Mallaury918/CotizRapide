@@ -41,6 +41,28 @@ class VintedSource(Source):
             data = self.session.get_json(self.base + "/api/v2/catalog/items", params=params)
         return [l for l in (parse_item(i, self.base) for i in data.get("items", [])) if l]
 
+    def verify_seller(self, listing: Listing) -> None:
+        # Le catalogue ne donne pas la note : on ne la demande que pour les
+        # annonces qui vont déclencher une alerte (quelques requêtes par passe).
+        if not listing.seller_id or listing.seller_rating is not None:
+            return
+        try:
+            user = self.session.get_json(f"{self.base}/api/v2/users/{listing.seller_id}")["user"]
+        except Exception as e:
+            print(f"[vinted] note du vendeur {listing.seller_id} indisponible : {e}")
+            return
+        apply_user(listing, user)
+
+
+def apply_user(listing: Listing, user: dict) -> None:
+    reputation = user.get("feedback_reputation")
+    if reputation is not None:
+        listing.seller_rating = round(float(reputation) * 5, 2)  # 0..1 -> 0..5
+    count = user.get("feedback_count")
+    if count is not None:
+        listing.seller_reviews = int(count)
+    listing.seller = user.get("login", listing.seller)
+
 
 def _amount(value) -> tuple[float, str] | None:
     """Vinted renvoie le prix soit en texte ("12.0"), soit en objet {amount, currency_code}."""
@@ -63,6 +85,7 @@ def parse_item(item: dict, base: str = "https://www.vinted.fr") -> Listing | Non
     if isinstance(item.get("price"), str) and item.get("currency"):
         currency = item["currency"]
     photo = item.get("photo") or {}
+    user = item.get("user") or {}
     url = item.get("url") or f"{base}/items/{item['id']}"
     if url.startswith("/"):
         url = base + url
@@ -75,4 +98,6 @@ def parse_item(item: dict, base: str = "https://www.vinted.fr") -> Listing | Non
         url=url,
         condition=item.get("status", ""),
         image=photo.get("url", ""),
+        seller=user.get("login", ""),
+        seller_id=str(user.get("id", "")),
     )

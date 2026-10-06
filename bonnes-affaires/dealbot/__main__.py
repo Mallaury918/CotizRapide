@@ -8,13 +8,42 @@ from .notifier import TelegramNotifier
 from .runner import run
 
 
+def show_sites(settings) -> None:
+    import time
+
+    from .storage import Store
+
+    store = Store(settings.database)
+    rows = store.all_sites()
+    now = time.time()
+    print(f"{len(settings.catalog.sites)} boutiques actives\n")
+    for site in settings.catalog.sites:
+        r = rows.get(site.domain, {})
+        if not r:
+            state = "pas encore scannée"
+        elif r["blocked_until"] > now:
+            hours = (r["blocked_until"] - now) / 3600
+            state = f"EN PAUSE {hours:.0f} h — {r['last_error']}"
+        elif r["last_ok"]:
+            state = f"ok ({r['mode']}, {store.page_count(site.domain)} pages connues, " \
+                    f"{r['products_seen']} relevés de prix)"
+        else:
+            state = r["last_error"] or "aucun produit lu pour l'instant"
+        vendeurs = f" [vendeurs : {', '.join(site.sellers)}]" if site.sellers else ""
+        print(f"- {site.name:<30} {site.category:<26} {state}{vendeurs}")
+    store.close()
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="dealbot", description="Alertes bonnes affaires / erreurs de prix")
     p.add_argument("-c", "--config", default="config.toml", help="fichier de configuration")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="scanner en continu (ou une fois avec --once)")
     r.add_argument("--once", action="store_true", help="une seule passe puis quitter")
+    r.add_argument("--catalogue-seul", action="store_true", help="seulement le scan des boutiques")
+    r.add_argument("--recherches-seules", action="store_true", help="seulement les [[watch]]")
     sub.add_parser("test-telegram", help="envoyer un message de test sur Telegram")
+    sub.add_parser("sites", help="liste des boutiques scannées et leur état")
     args = p.parse_args(argv)
 
     settings = config.load(args.config)
@@ -26,7 +55,11 @@ def main(argv=None) -> int:
             "✅ DealBot est bien connecté : les bonnes affaires arriveront ici.")
         print("Message envoyé.")
         return 0
-    run(settings, loop=not args.once)
+    if args.cmd == "sites":
+        show_sites(settings)
+        return 0
+    run(settings, loop=not args.once, catalog=not args.recherches_seules,
+        watches=not args.catalogue_seul)
     return 0
 
 

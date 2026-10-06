@@ -23,6 +23,39 @@ marketplace = "EBAY_FR"
 domain = "www.vinted.fr"
 
 # ---------------------------------------------------------------------------
+# MODE CATALOGUE : scanne TOUS les produits de ~50 enseignes fiables
+# (liste dans dealbot/data/sites.toml), sans rien configurer.
+# Signale : le même produit (même code-barres) bien moins cher qu'ailleurs,
+# et les chutes de prix brutales (erreurs d'étiquetage).
+# ---------------------------------------------------------------------------
+[catalog]
+enabled = true
+pages_per_site = 150        # pages lues par site à chaque passe
+workers = 8                 # sites scannés en parallèle
+min_price = 15              # ignore les articles moins chers
+deal_discount = 0.35        # -35 % vs la médiane des autres sites = alerte
+error_discount = 0.60       # -60 % = erreur de prix probable
+min_other_sites = 2         # le produit doit être vu sur au moins 2 autres sites
+disabled_sites = []         # ex. ["cdiscount.com", "nike.com"]
+enable_sites = []           # sites désactivés par défaut à activer, ex. ["amazon.fr"]
+
+# Ajouter votre propre boutique fiable :
+# [[catalog.site]]
+# name = "Ma boutique"
+# domain = "www.ma-boutique.fr"
+# kind = "enseigne"
+
+# ---------------------------------------------------------------------------
+# VENDEURS FIABLES sur les plateformes (eBay, Vinted) : en dessous de ces
+# seuils, ou si la note est inconnue, l'annonce n'est jamais envoyée.
+# ---------------------------------------------------------------------------
+[trust]
+ebay_min_feedback_percent = 98.0
+ebay_min_feedback_score = 100
+vinted_min_rating = 4.5
+vinted_min_reviews = 15
+
+# ---------------------------------------------------------------------------
 # Une section [[watch]] par produit à surveiller.
 # deal_discount  : alerte « sous le marché » dès cette remise (0.30 = -30 %)
 # error_discount : au-delà, c'est signalé comme « erreur de prix probable »
@@ -54,7 +87,17 @@ min_price = 100
 max_price = 450
 reference_price = 280
 
-# Sites marchands : collez des pages produit ou des pages catégorie.
+[[watch]]
+name = "AirPods Pro 2"
+query = "airpods pro 2"
+sources = ["ebay", "vinted"]
+must_include = ["airpods", "pro"]
+exclude = ["boitier seul", "boîtier seul", "écouteur seul", "ecouteur seul", "gauche", "droit"]
+min_price = 60
+max_price = 300
+reference_price = 200
+
+# Pages précises à surveiller en plus du catalogue (ex. une boutique hors liste).
 # Le bot lit les prix publiés pour Google (schema.org) et alerte en cas de
 # chute brutale (erreur de prix) ou de passage sous reference_price.
 [[watch]]

@@ -36,6 +36,43 @@ class Watch:
 
 
 @dataclass
+class Site:
+    """Une boutique scannée en entier par le mode catalogue."""
+
+    name: str
+    domain: str
+    category: str = ""
+    kind: str = "enseigne"  # "enseigne" ou "marketplace"
+    sellers: list[str] = field(default_factory=list)  # vendeurs acceptés (marketplace)
+    path_prefix: str = ""
+    start_urls: list[str] = field(default_factory=list)
+    enabled: bool = True
+    note: str = ""
+
+
+@dataclass
+class Catalog:
+    enabled: bool = True
+    pages_per_site: int = 150  # pages lues par site et par passe
+    workers: int = 8  # sites scannés en parallèle (un seul flux par site)
+    min_price: float = 15.0  # ignore les petits articles (trop de bruit)
+    deal_discount: float = 0.35  # vs le même produit (EAN) sur les autres sites
+    error_discount: float = 0.60
+    min_other_sites: int = 2  # nb de sites concurrents mini pour comparer
+    sites: list[Site] = field(default_factory=list)
+
+
+@dataclass
+class Trust:
+    """Seuils pour ne garder que les vendeurs fiables sur les plateformes."""
+
+    ebay_min_feedback_percent: float = 98.0
+    ebay_min_feedback_score: int = 100
+    vinted_min_rating: float = 4.5  # sur 5
+    vinted_min_reviews: int = 15
+
+
+@dataclass
 class Settings:
     interval_minutes: int = 15
     database: str = "dealbot.sqlite3"
@@ -50,6 +87,18 @@ class Settings:
     ebay_marketplace: str = "EBAY_FR"
     vinted_domain: str = "www.vinted.fr"
     watches: list[Watch] = field(default_factory=list)
+    catalog: Catalog = field(default_factory=Catalog)
+    trust: Trust = field(default_factory=Trust)
+
+
+SITES_FILE = Path(__file__).parent / "data" / "sites.toml"
+
+
+def load_sites(path: str | Path = SITES_FILE) -> list[Site]:
+    with open(path, "rb") as f:
+        raw = tomllib.load(f)
+    return [Site(**{k: v for k, v in s.items() if k in Site.__dataclass_fields__})
+            for s in raw.get("site", [])]
 
 
 def _env_or(value: str, env: str) -> str:
@@ -81,6 +130,31 @@ def load(path: str | Path) -> Settings:
         ebay_marketplace=ebay.get("marketplace", "EBAY_FR"),
         vinted_domain=vinted.get("domain", "www.vinted.fr"),
     )
+
+    cat = raw.get("catalog", {})
+    s.catalog = Catalog(
+        enabled=bool(cat.get("enabled", True)),
+        pages_per_site=int(cat.get("pages_per_site", 150)),
+        workers=int(cat.get("workers", 8)),
+        min_price=float(cat.get("min_price", 15.0)),
+        deal_discount=float(cat.get("deal_discount", 0.35)),
+        error_discount=float(cat.get("error_discount", 0.60)),
+        min_other_sites=int(cat.get("min_other_sites", 2)),
+    )
+    disabled = {d.lower().removeprefix("www.") for d in cat.get("disabled_sites", [])}
+    enabled_extra = {d.lower().removeprefix("www.") for d in cat.get("enable_sites", [])}
+    sites = load_sites(cat.get("sites_file", SITES_FILE))
+    sites += [Site(**x) for x in cat.get("site", [])]  # sites perso ajoutés dans config.toml
+    for site in sites:
+        bare = site.domain.lower().removeprefix("www.")
+        if bare in enabled_extra:
+            site.enabled = True
+        if bare in disabled:
+            site.enabled = False
+    s.catalog.sites = [site for site in sites if site.enabled]
+
+    t = raw.get("trust", {})
+    s.trust = Trust(**{k: t[k] for k in Trust.__dataclass_fields__ if k in t})
 
     for w in raw.get("watch", []):
         exclude = list(w.get("exclude", []))

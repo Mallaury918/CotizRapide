@@ -68,6 +68,12 @@ def parse_item(item: dict) -> Listing | None:
         if cost is not None:
             shipping = float(cost)
             break
+    seller = item.get("seller") or {}
+    try:
+        rating = float(seller["feedbackPercentage"]) / 20  # 98 % -> 4.9 / 5
+    except (KeyError, TypeError, ValueError):
+        rating = None
+    reviews = seller.get("feedbackScore")
     return Listing(
         source="ebay",
         item_id=item["itemId"],
@@ -78,4 +84,7 @@ def parse_item(item: dict) -> Listing | None:
         shipping=shipping,
         condition=item.get("condition", ""),
         image=(item.get("image") or {}).get("imageUrl", ""),
+        seller=seller.get("username", ""),
+        seller_rating=rating,
+        seller_reviews=int(reviews) if reviews is not None else None,
     )

@@ -16,6 +16,12 @@ class Listing:
     shipping: float = 0.0  # frais de port connus (0 si inconnus)
     condition: str = ""  # "neuf", "très bon état"...
     image: str = ""
+    gtin: str = ""  # code-barres EAN/UPC : permet de comparer un produit entre sites
+    seller: str = ""  # nom du vendeur quand la source le donne
+    seller_id: str = ""
+    seller_rating: float | None = None  # note du vendeur ramenée sur 5
+    seller_reviews: int | None = None  # nombre d'avis du vendeur
+    seller_checked: bool = False  # vendeur contrôlé (marketplace avec filtre)
 
     @property
     def total(self) -> float:
