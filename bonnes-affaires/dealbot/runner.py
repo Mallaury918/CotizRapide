@@ -57,13 +57,13 @@ def run_watches(settings: Settings, store: Store, sources: dict, notifiers: list
                 print(f"[{watch.name}] {name} : erreur {e}")
         trusted = []
         for deal in analyze(watch, listings, store, settings):
-            source = sources.get(deal.listing.source)
-            if source is not None:
-                source.verify_seller(deal.listing)
+            verify = getattr(sources.get(deal.listing.source), "verify_seller", None)
+            if verify:
+                verify(deal.listing)
             reason = untrusted_reason(deal.listing, settings.trust)
             if reason:
                 print(f"[{watch.name}] ignorée ({reason}) : {deal.listing.url}")
-                # Mémorisée pour ne pas revérifier ce vendeur à chaque passe.
+                # Mémorisée pour ne pas la réexaminer à chaque passe.
                 store.mark_alerted(deal.listing.key, deal.listing.total)
             else:
                 trusted.append(deal)

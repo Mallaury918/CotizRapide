@@ -41,12 +41,9 @@ def market_price(prices: list[float]) -> float | None:
 
 def _warnings(listing: Listing, discount: float) -> list[str]:
     w = []
-    marketplace = listing.source in ("vinted", "leboncoin", "ebay")
-    if marketplace and discount >= 0.6:
-        w.append("Prix très bas sur une plateforme entre particuliers : méfiez-vous des "
-                 "arnaques (paiement hors plateforme, vendeur sans avis).")
-    if listing.shipping == 0 and listing.source == "vinted":
-        w.append("Frais de port / protection acheteur Vinted non inclus.")
+    if listing.source == "ebay" and discount >= 0.6:
+        w.append("Prix très bas sur eBay : vérifiez l'annonce (photos, description) et "
+                 "ne payez jamais en dehors d'eBay.")
     return w
 
 

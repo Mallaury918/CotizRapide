@@ -64,12 +64,10 @@ class Catalog:
 
 @dataclass
 class Trust:
-    """Seuils pour ne garder que les vendeurs fiables sur les plateformes."""
+    """Seuils pour ne garder que les vendeurs professionnels fiables sur eBay."""
 
     ebay_min_feedback_percent: float = 98.0
     ebay_min_feedback_score: int = 100
-    vinted_min_rating: float = 4.5  # sur 5
-    vinted_min_reviews: int = 15
 
 
 @dataclass
@@ -85,7 +83,6 @@ class Settings:
     ebay_client_id: str = ""
     ebay_client_secret: str = ""
     ebay_marketplace: str = "EBAY_FR"
-    vinted_domain: str = "www.vinted.fr"
     watches: list[Watch] = field(default_factory=list)
     catalog: Catalog = field(default_factory=Catalog)
     trust: Trust = field(default_factory=Trust)
@@ -112,7 +109,6 @@ def load(path: str | Path) -> Settings:
     general = raw.get("general", {})
     telegram = raw.get("telegram", {})
     ebay = raw.get("ebay", {})
-    vinted = raw.get("vinted", {})
 
     s = Settings(
         interval_minutes=int(general.get("interval_minutes", 15)),
@@ -128,7 +124,6 @@ def load(path: str | Path) -> Settings:
         ebay_client_id=_env_or(ebay.get("client_id", ""), "DEALBOT_EBAY_CLIENT_ID"),
         ebay_client_secret=_env_or(ebay.get("client_secret", ""), "DEALBOT_EBAY_CLIENT_SECRET"),
         ebay_marketplace=ebay.get("marketplace", "EBAY_FR"),
-        vinted_domain=vinted.get("domain", "www.vinted.fr"),
     )
 
     cat = raw.get("catalog", {})
@@ -164,7 +159,7 @@ def load(path: str | Path) -> Settings:
             Watch(
                 name=w["name"],
                 query=w.get("query", w["name"]),
-                sources=list(w.get("sources", ["ebay", "vinted"])),
+                sources=list(w.get("sources", ["ebay"])),
                 must_include=[m.lower() for m in w.get("must_include", [])],
                 exclude=[e.lower() for e in exclude],
                 min_price=w.get("min_price"),

@@ -1,7 +1,7 @@
 # DealBot — alertes bonnes affaires & erreurs de prix
 
 Scanne en continu **tout le catalogue de ~50 enseignes fiables** et les annonces
-eBay / Vinted de **vendeurs bien notés**, et vous envoie automatiquement sur
+eBay de **vendeurs professionnels bien notés** (aucun particulier), et vous envoie automatiquement sur
 **Telegram** tout article :
 
 - 💰 **sous le marché** : le même produit (même code-barres EAN) est bien moins
@@ -41,20 +41,18 @@ Il respecte le `robots.txt` de chaque site, ne fait qu'une requête toutes les
 1,5 s par site, et **met en pause** (6 h, puis 12 h, 24 h…) un site qui bloque
 les robots, plutôt que d'insister.
 
-### 2. Recherches ciblées sur eBay et Vinted
+### 2. Recherches ciblées sur eBay (vendeurs pros uniquement)
 
-Pour les plateformes de revendeurs et de particuliers, on définit des
-recherches (`[[watch]]` dans `config.toml`) : iPhone, Switch, AirPods… Le bot
-compare chaque annonce à la médiane du marché. **Seuls les vendeurs fiables
-passent** (réglable dans `[trust]`) :
+Sur eBay, on définit des recherches (`[[watch]]` dans `config.toml`) : iPhone,
+Switch, AirPods… Le bot compare chaque annonce à la médiane du marché.
 
-| Plateforme | Seuil par défaut |
-|------------|------------------|
-| eBay       | ≥ 98 % d'avis positifs **et** ≥ 100 évaluations |
-| Vinted     | note ≥ 4,5/5 **et** ≥ 15 avis |
+**Les particuliers sont toujours exclus** : la recherche demande à eBay les
+seuls vendeurs professionnels, et le statut est revérifié avant chaque alerte
+(fiche complète de l'annonce si besoin). En plus, le vendeur pro doit avoir
+**≥ 98 % d'avis positifs et ≥ 100 évaluations** (réglable dans `[trust]`).
+Si le statut ou la note est inconnu, l'annonce n'est jamais envoyée.
 
-Un vendeur dont la note est inconnue est refusé. Leboncoin n'est pas inclus :
-le site bloque activement les robots et n'affiche pas de note fiable des vendeurs.
+Aucune plateforme entre particuliers n'est utilisée (ni Vinted, ni Leboncoin).
 
 ## Installation
 

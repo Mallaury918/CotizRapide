@@ -12,6 +12,3 @@ class Source(ABC):
     @abstractmethod
     def search(self, watch: Watch) -> list[Listing]:
         """Renvoie les annonces/produits correspondant à la surveillance."""
-
-    def verify_seller(self, listing: Listing) -> None:
-        """Complète la note du vendeur avant une alerte (si la source le permet)."""

@@ -215,9 +215,9 @@ class CatalogAnalyzeTest(unittest.TestCase):
 
 
 class TrustTest(unittest.TestCase):
-    def listing(self, source, rating, reviews):
+    def listing(self, source, rating, reviews, pro=True):
         return Listing(source, "1", "x", 10, "EUR", "u", seller="bob",
-                       seller_rating=rating, seller_reviews=reviews)
+                       seller_rating=rating, seller_reviews=reviews, seller_pro=pro)
 
     def test_ebay(self):
         t = Trust()
@@ -226,12 +226,10 @@ class TrustTest(unittest.TestCase):
         self.assertIn("évaluations", untrusted_reason(self.listing("ebay", 5, 12), t))
         self.assertIsNotNone(untrusted_reason(self.listing("ebay", None, None), t))
 
-    def test_vinted(self):
+    def test_ebay_private_sellers_always_refused(self):
         t = Trust()
-        self.assertIsNone(untrusted_reason(self.listing("vinted", 4.9, 120), t))
-        self.assertIsNotNone(untrusted_reason(self.listing("vinted", 4.0, 120), t))
-        self.assertIsNotNone(untrusted_reason(self.listing("vinted", 5.0, 3), t))
-        self.assertIsNotNone(untrusted_reason(self.listing("vinted", None, None), t))
+        self.assertIn("particulier", untrusted_reason(self.listing("ebay", 5, 99999, pro=False), t))
+        self.assertIn("inconnu", untrusted_reason(self.listing("ebay", 5, 99999, pro=None), t))
 
     def test_shops_not_concerned(self):
         self.assertIsNone(untrusted_reason(self.listing("site:fnac.com", None, None), Trust()))

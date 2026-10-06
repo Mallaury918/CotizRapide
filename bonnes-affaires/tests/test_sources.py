@@ -1,6 +1,6 @@
 import unittest
 
-from dealbot.sources import ebay, vinted
+from dealbot.sources import ebay
 from dealbot.sources.sites import extract_listings, parse_price
 
 PRODUCT_PAGE = """
@@ -67,18 +67,28 @@ class EbayTest(unittest.TestCase):
         })
         self.assertEqual((l.price, l.shipping, l.total), (650.0, 8.5, 658.5))
 
+    def test_seller_account_type(self):
+        base = {"itemId": "1", "title": "x", "price": {"value": "10", "currency": "EUR"}}
+        pro = ebay.parse_item({**base, "seller": {"sellerAccountType": "BUSINESS"}})
+        perso = ebay.parse_item({**base, "seller": {"sellerAccountType": "INDIVIDUAL"}})
+        unknown = ebay.parse_item(base)
+        self.assertEqual((pro.seller_pro, perso.seller_pro, unknown.seller_pro), (True, False, None))
+        self.assertTrue(ebay.seller_is_pro({"sellerLegalInfo": {"legalContactFirstName": "A"}}))
+
+    def test_verify_seller_reads_full_item(self):
+        class S:
+            def get_json(self, url, **kw):
+                self.url = url
+                return {"seller": {"sellerAccountType": "INDIVIDUAL"}}
+        src = ebay.EbaySource(S(), "id", "secret")
+        src._token, src._expires = "t", float("inf")
+        l = ebay.parse_item({"itemId": "v1|123|0", "title": "x", "price": {"value": "10"}})
+        src.verify_seller(l)
+        self.assertFalse(l.seller_pro)
+        self.assertTrue(src.session.url.endswith("/item/v1%7C123%7C0"))
+
     def test_missing_price(self):
         self.assertIsNone(ebay.parse_item({"itemId": "1", "title": "x"}))
-
-
-class VintedTest(unittest.TestCase):
-    def test_parse_item_both_price_formats(self):
-        a = vinted.parse_item({"id": 1, "title": "Switch OLED", "brand_title": "Nintendo",
-                               "price": {"amount": "180.0", "currency_code": "EUR"},
-                               "url": "https://www.vinted.fr/items/1-switch"})
-        b = vinted.parse_item({"id": 2, "title": "Switch", "price": "150.0", "currency": "EUR"})
-        self.assertEqual((a.price, a.title), (180.0, "Switch OLED Nintendo"))
-        self.assertEqual((b.price, b.url), (150.0, "https://www.vinted.fr/items/2"))
 
 
 if __name__ == "__main__":

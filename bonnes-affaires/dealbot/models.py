@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 class Listing:
     """Une annonce / un produit trouvé sur une source."""
 
-    source: str  # "ebay", "vinted", "site:fnac.com"...
+    source: str  # "ebay", "site:fnac.com"...
     item_id: str  # identifiant unique dans la source
     title: str
     price: float  # prix de l'article
@@ -18,9 +18,9 @@ class Listing:
     image: str = ""
     gtin: str = ""  # code-barres EAN/UPC : permet de comparer un produit entre sites
     seller: str = ""  # nom du vendeur quand la source le donne
-    seller_id: str = ""
     seller_rating: float | None = None  # note du vendeur ramenée sur 5
     seller_reviews: int | None = None  # nombre d'avis du vendeur
+    seller_pro: bool | None = None  # vendeur professionnel (None = inconnu)
     seller_checked: bool = False  # vendeur contrôlé (marketplace avec filtre)
 
     @property

@@ -19,9 +19,6 @@ client_id = ""        # clé gratuite : https://developer.ebay.com
 client_secret = ""
 marketplace = "EBAY_FR"
 
-[vinted]
-domain = "www.vinted.fr"
-
 # ---------------------------------------------------------------------------
 # MODE CATALOGUE : scanne TOUS les produits de ~50 enseignes fiables
 # (liste dans dealbot/data/sites.toml), sans rien configurer.
@@ -46,14 +43,13 @@ enable_sites = []           # sites désactivés par défaut à activer, ex. ["a
 # kind = "enseigne"
 
 # ---------------------------------------------------------------------------
-# VENDEURS FIABLES sur les plateformes (eBay, Vinted) : en dessous de ces
-# seuils, ou si la note est inconnue, l'annonce n'est jamais envoyée.
+# VENDEURS FIABLES sur eBay : uniquement des vendeurs PROFESSIONNELS (les
+# particuliers sont toujours exclus), avec au moins ces évaluations. Si le
+# statut ou la note est inconnu, l'annonce n'est jamais envoyée.
 # ---------------------------------------------------------------------------
 [trust]
 ebay_min_feedback_percent = 98.0
 ebay_min_feedback_score = 100
-vinted_min_rating = 4.5
-vinted_min_reviews = 15
 
 # ---------------------------------------------------------------------------
 # Une section [[watch]] par produit à surveiller.
@@ -69,7 +65,7 @@ vinted_min_reviews = 15
 [[watch]]
 name = "iPhone 15 Pro 128 Go"
 query = "iphone 15 pro 128"
-sources = ["ebay", "vinted"]
+sources = ["ebay"]
 must_include = ["iphone", "15", "pro"]
 exclude = ["max", "plus"]
 min_price = 250
@@ -80,7 +76,7 @@ deal_discount = 0.25
 [[watch]]
 name = "Nintendo Switch OLED"
 query = "nintendo switch oled"
-sources = ["ebay", "vinted"]
+sources = ["ebay"]
 must_include = ["switch", "oled"]
 exclude = ["jeu", "manette", "joy-con", "dock seul"]
 min_price = 100
@@ -90,7 +86,7 @@ reference_price = 280
 [[watch]]
 name = "AirPods Pro 2"
 query = "airpods pro 2"
-sources = ["ebay", "vinted"]
+sources = ["ebay"]
 must_include = ["airpods", "pro"]
 exclude = ["boitier seul", "boîtier seul", "écouteur seul", "ecouteur seul", "gauche", "droit"]
 min_price = 60
