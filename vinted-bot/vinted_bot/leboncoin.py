@@ -215,6 +215,10 @@ class LeboncoinClient:
             ads = [ad for ad in ads if _attribut(ad, "shippable").lower() not in ("false", "non")]
         return [a for a in map(normaliser_lbc, ads) if a]
 
+    def nouveautes(self, page=1) -> list:
+        """Dernières annonces de toutes les catégories (avec livraison si demandé)."""
+        return self.annonces({}, {}, recentes=True, page=page)
+
     def profil(self, user_id: str) -> Profil:
         """Avis et note d'un vendeur. Leboncoin n'affiche pas de nombre de ventes."""
         infos = self.requete("GET", f"{API}/api/user-card/v2/{user_id}/infos")

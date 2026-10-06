@@ -4,6 +4,9 @@ import sqlite3
 import time
 
 
+TABLES_FLUX = ("flux", "lbc_flux")
+
+
 class Stockage:
     def __init__(self, chemin="vinted_bot.db"):
         self.db = sqlite3.connect(chemin)
@@ -22,13 +25,18 @@ class Stockage:
             CREATE TABLE IF NOT EXISTS profils (
                 cle TEXT PRIMARY KEY, ventes INTEGER, avis INTEGER, note REAL,
                 ventes_connues INTEGER, maj_le REAL);
-            CREATE TABLE IF NOT EXISTS flux (
-                id INTEGER PRIMARY KEY, marque TEXT, etat TEXT, prix REAL, catalogue INTEGER,
-                jetons TEXT, vu_le REAL);
-            CREATE INDEX IF NOT EXISTS flux_vu_le ON flux (vu_le);
-            CREATE TABLE IF NOT EXISTS flux_jetons (
-                marque TEXT, jeton TEXT, id INTEGER, PRIMARY KEY (marque, jeton, id)) WITHOUT ROWID;
         """)
+        # Une mémoire « tout le site » par site : flux (Vinted) et lbc_flux (Leboncoin).
+        # La colonne « marque » contient la clé de regroupement des annonces comparables.
+        for table in TABLES_FLUX:
+            self.db.executescript(f"""
+                CREATE TABLE IF NOT EXISTS {table} (
+                    id INTEGER PRIMARY KEY, marque TEXT, etat TEXT, prix REAL, catalogue INTEGER,
+                    jetons TEXT, vu_le REAL);
+                CREATE INDEX IF NOT EXISTS {table}_vu_le ON {table} (vu_le);
+                CREATE TABLE IF NOT EXISTS {table}_jetons (
+                    marque TEXT, jeton TEXT, id INTEGER, PRIMARY KEY (marque, jeton, id)) WITHOUT ROWID;
+            """)
 
     def connait_recherche(self, recherche) -> bool:
         return self.db.execute(
@@ -86,44 +94,45 @@ class Stockage:
 
     # ─── Flux global ───────────────────────────────────────────────────────────
 
-    def dernier_id_flux(self):
-        return self.db.execute("SELECT MAX(id) FROM flux").fetchone()[0]
+    def dernier_id_flux(self, table="flux"):
+        return self.db.execute(f"SELECT MAX(id) FROM {table}").fetchone()[0]
 
-    def dans_flux(self, id_) -> bool:
-        return self.db.execute("SELECT 1 FROM flux WHERE id = ?", (id_,)).fetchone() is not None
+    def dans_flux(self, id_, table="flux") -> bool:
+        return self.db.execute(f"SELECT 1 FROM {table} WHERE id = ?", (id_,)).fetchone() is not None
 
-    def taille_flux(self) -> int:
-        return self.db.execute("SELECT COUNT(*) FROM flux").fetchone()[0]
+    def taille_flux(self, table="flux") -> int:
+        return self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-    def enregistrer_flux(self, annonces_jetons):
+    def enregistrer_flux(self, lignes, table="flux"):
+        """`lignes` : (annonce, jetons du titre, clé de regroupement)."""
         maintenant = time.time()
         self.db.executemany(
-            "INSERT OR REPLACE INTO flux VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(a.id, a.marque, a.etat, a.prix_total, a.catalogue, " ".join(sorted(j)), maintenant)
-             for a, j in annonces_jetons])
+            f"INSERT OR REPLACE INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(a.id, groupe, a.etat, a.prix_total, a.catalogue, " ".join(sorted(j)), maintenant)
+             for a, j, groupe in lignes])
         self.db.executemany(
-            "INSERT OR IGNORE INTO flux_jetons VALUES (?, ?, ?)",
-            [(a.marque, jeton, a.id) for a, j in annonces_jetons for jeton in j])
+            f"INSERT OR IGNORE INTO {table}_jetons VALUES (?, ?, ?)",
+            [(groupe, jeton, a.id) for a, j, groupe in lignes for jeton in j])
 
-    def candidats_flux(self, marque, jetons, communs_min, jours) -> list:
-        """Annonces de la même marque partageant au moins `communs_min` mots avec `jetons`."""
+    def candidats_flux(self, groupe, jetons, communs_min, jours, table="flux") -> list:
+        """Annonces du même groupe partageant au moins `communs_min` mots avec `jetons`."""
         jetons = list(jetons)
         return self.db.execute(f"""
-            SELECT f.id, f.prix, f.etat, f.catalogue, f.jetons FROM flux f
-            JOIN (SELECT id FROM flux_jetons
+            SELECT f.id, f.prix, f.etat, f.catalogue, f.jetons FROM {table} f
+            JOIN (SELECT id FROM {table}_jetons
                   WHERE marque = ? AND jeton IN ({",".join("?" * len(jetons))})
                   GROUP BY id HAVING COUNT(*) >= ?) c ON c.id = f.id
             WHERE f.vu_le >= ?""",
-            (marque, *jetons, communs_min, time.time() - jours * 86400)).fetchall()
+            (groupe, *jetons, communs_min, time.time() - jours * 86400)).fetchall()
 
-    def nettoyer_flux(self, jours):
+    def nettoyer_flux(self, jours, table="flux"):
         limite = time.time() - jours * 86400
         anciennes = self.db.execute(
-            "SELECT id, marque, jetons FROM flux WHERE vu_le < ?", (limite,)).fetchall()
+            f"SELECT id, marque, jetons FROM {table} WHERE vu_le < ?", (limite,)).fetchall()
         self.db.executemany(
-            "DELETE FROM flux_jetons WHERE marque = ? AND jeton = ? AND id = ?",
+            f"DELETE FROM {table}_jetons WHERE marque = ? AND jeton = ? AND id = ?",
             [(marque, jeton, id_) for id_, marque, j in anciennes for jeton in j.split()])
-        self.db.execute("DELETE FROM flux WHERE vu_le < ?", (limite,))
+        self.db.execute(f"DELETE FROM {table} WHERE vu_le < ?", (limite,))
 
     def valider(self):
         self.db.commit()

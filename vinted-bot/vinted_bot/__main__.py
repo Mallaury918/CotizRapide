@@ -40,7 +40,7 @@ def charger_config(chemin):
         sys.exit(f"Erreur dans {chemin} : {e}")
     conf.setdefault("recherches", [])
     if not (any(r.get("actif", True) for r in conf["recherches"]) or conf.get("flux", {}).get("actif")
-            or recherches_leboncoin(conf)):
+            or recherches_leboncoin(conf) or Flux.leboncoin(conf).actif):
         sys.exit("Rien à surveiller : active [flux], [leboncoin] ou des [[recherches]] dans la configuration.")
     return conf
 
@@ -131,22 +131,26 @@ def passage_leboncoin(conf, client, stock, notif):
 
 
 def passage_flux(flux, client, stock, notif):
-    sans_planter("Flux", flux.passage, client, stock, notif)
-    stock.nettoyer_flux(flux.jours)
+    sans_planter(flux.nom, flux.passage, client, stock, notif)
+    stock.nettoyer_flux(flux.jours, flux.table)
     stock.valider()
 
 
-def boucle(conf, client, stock, notif, flux, lbc=None):
-    """Fait tourner les recherches, le flux global et Leboncoin, chacun à son rythme."""
+def boucle(conf, client, stock, notif, flux, lbc=None, flux_lbc=None):
+    """Fait tourner chaque surveillance (recherches, tout le site…) à son propre rythme."""
     taches = []
     if any(r.get("actif", True) for r in conf["recherches"]):
         intervalle = conf.get("general", {}).get("intervalle_minutes", 5) * 60
         taches.append([0.0, intervalle, lambda: passage_recherches(conf, client, stock, notif)])
     if flux.actif:
         taches.append([0.0, flux.intervalle, lambda: passage_flux(flux, client, stock, notif)])
-    if lbc:
+    if lbc and recherches_leboncoin(conf):
         intervalle = conf["leboncoin"].get("intervalle_minutes", 10) * 60
         taches.append([0.0, intervalle, lambda: passage_leboncoin(conf, lbc, stock, notif)])
+    if lbc and flux_lbc and flux_lbc.actif:
+        # décalé de 20 s pour ne pas interroger Leboncoin deux fois d'affilée au démarrage
+        taches.append([time.time() + 20, flux_lbc.intervalle,
+                       lambda: passage_flux(flux_lbc, lbc, stock, notif)])
     while True:
         for tache in taches:
             if time.time() >= tache[0]:
@@ -278,7 +282,9 @@ def main():
     g = conf.get("general", {})
     client = VintedClient(g.get("domaine", "www.vinted.fr"), tuple(g.get("pause_entre_requetes", [2, 5])))
     lbc = None
-    if recherches_leboncoin(conf) or (args.diagnostic and conf.get("leboncoin", {}).get("actif")):
+    flux_lbc = Flux.leboncoin(conf)
+    if (recherches_leboncoin(conf) or flux_lbc.actif
+            or (args.diagnostic and conf.get("leboncoin", {}).get("actif"))):
         try:
             lbc = LeboncoinClient(tuple(conf["leboncoin"].get("pause_entre_requetes", [4, 9])),
                                   conf["leboncoin"].get("livraison_uniquement", True))
@@ -291,7 +297,7 @@ def main():
         return
     stock = Stockage(g.get("base_de_donnees", "vinted_bot.db"))
 
-    flux = Flux(conf)
+    flux = Flux.vinted(conf)
 
     if args.une_fois:
         passage_recherches(conf, client, stock, notif)
@@ -299,17 +305,27 @@ def main():
             passage_flux(flux, client, stock, notif)
         if lbc:
             passage_leboncoin(conf, lbc, stock, notif)
+            if flux_lbc.actif:
+                passage_flux(flux_lbc, lbc, stock, notif)
         return
 
+    surveillances = []
+    if flux.actif:
+        surveillances.append(f"tout Vinted (toutes les {flux.intervalle} s)")
+    if lbc and flux_lbc.actif:
+        surveillances.append(f"tout Leboncoin avec livraison (toutes les {flux_lbc.intervalle} s)")
     actives = sum(r.get("actif", True) for r in conf["recherches"])
-    log.info("Bot démarré : %s%d recherche(s) Vinted ciblée(s)%s. Ctrl+C pour arrêter.",
-             f"tout Vinted toutes les {flux.intervalle} s + " if flux.actif else "", actives,
-             f" + {len(recherches_leboncoin(conf))} recherche(s) Leboncoin" if lbc else "")
-    if flux.actif and stock.taille_flux() < 5000:
-        log.info("[Flux] Les premières heures, le bot apprend les prix du marché : "
-                 "les alertes arriveront au fur et à mesure.")
+    if actives:
+        surveillances.append(f"{actives} recherche(s) Vinted")
+    if lbc and recherches_leboncoin(conf):
+        surveillances.append(f"{len(recherches_leboncoin(conf))} recherche(s) Leboncoin")
+    log.info("Bot démarré : %s. Ctrl+C pour arrêter.", " + ".join(surveillances))
+    for f in (flux, flux_lbc):
+        if f.actif and stock.taille_flux(f.table) < 5000:
+            log.info("[%s] Les premières heures, le bot apprend les prix du marché : "
+                     "les alertes arriveront au fur et à mesure.", f.nom)
     try:
-        boucle(conf, client, stock, notif, flux, lbc)
+        boucle(conf, client, stock, notif, flux, lbc, flux_lbc)
     except KeyboardInterrupt:
         log.info("Arrêt demandé, à bientôt !")
 

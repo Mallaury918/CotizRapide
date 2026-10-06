@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 
-from .analyse import criteres_pour, evaluer, normaliser, passe_filtres, simplifier
+from .analyse import criteres_pour, evaluer, passe_filtres, simplifier
 from .vendeurs import verifier_vendeur
 
 log = logging.getLogger(__name__)
@@ -73,33 +73,67 @@ def comparables(ja: set, jb: set) -> bool:
 
 
 class Flux:
-    def __init__(self, conf: dict):
-        self.conf = conf.get("flux", {})
-        self.crit = criteres_pour(self.conf, conf)
-        self.intervalle = self.conf.get("intervalle_secondes", 30)
-        self.pages_max = self.conf.get("pages_max", 3)
-        self.jours = self.conf.get("historique_jours", 10)
-        self.sans_marque = not self.conf.get("ignorer_sans_marque", True)
-        self.alertes_max = self.conf.get("alertes_max_par_heure", 30)
+    """Surveillance de toutes les nouvelles annonces d'un site.
+
+    Vinted : on compare les annonces de la même marque.
+    Leboncoin : de la même catégorie (et de la même marque si elle est renseignée), car
+    beaucoup d'annonces n'ont pas de marque mais toutes ont une catégorie.
+    """
+
+    def __init__(self, section: dict, crit: dict, nom="Tout Vinted", table="flux",
+                 par_categorie=False, intervalle=30, pages_max=3, sans_marque=False):
+        self.conf = section
+        self.crit = crit
+        self.nom = nom
+        self.table = table
+        self.par_categorie = par_categorie
+        self.intervalle = section.get("intervalle_secondes", intervalle)
+        self.pages_max = section.get("pages_max", pages_max)
+        self.jours = section.get("historique_jours", 10)
+        self.sans_marque = not section.get("ignorer_sans_marque", not sans_marque)
+        self.alertes_max = section.get("alertes_max_par_heure", 30)
         self._alertes = deque()
+
+    @classmethod
+    def vinted(cls, conf: dict) -> "Flux":
+        section = conf.get("flux", {})
+        return cls(section, criteres_pour(section, conf))
+
+    @classmethod
+    def leboncoin(cls, conf: dict) -> "Flux":
+        lbc = conf.get("leboncoin", {})
+        section = lbc.get("tout_le_site", {})
+        # Critères : globaux, puis ceux de [leboncoin], puis ceux de [leboncoin.tout_le_site]
+        source = {**{k: v for k, v in lbc.items() if not isinstance(v, (dict, list))}, **section}
+        source["mots_exclus"] = list(lbc.get("mots_exclus", [])) + list(section.get("mots_exclus", []))
+        flux = cls(section, criteres_pour(source, conf), nom="Tout Leboncoin", table="lbc_flux",
+                   par_categorie=True, intervalle=60, pages_max=2, sans_marque=True)
+        flux.conf = {**section, "actif": bool(lbc.get("actif") and section.get("actif"))}
+        return flux
 
     @property
     def actif(self) -> bool:
         return self.conf.get("actif", False)
 
+    def groupe(self, a) -> str:
+        """Clé des annonces comparables entre elles."""
+        if self.par_categorie:
+            return f"{simplifier(a.marque)}|{a.catalogue}"
+        return a.marque
+
     def _lire_nouveautes(self, client, stock) -> list:
-        dernier = stock.dernier_id_flux()
+        dernier = stock.dernier_id_flux(self.table)
         lues = {}
         for page in range(1, self.pages_max + 1):
-            items = client.rechercher({"currency": "EUR"}, ordre="newest_first", page=page)
-            for a in filter(None, map(normaliser, items)):
+            annonces = client.nouveautes(page)
+            for a in annonces:
                 lues[a.id] = a
-            if not items or dernier is None or min(int(i["id"]) for i in items) <= dernier:
+            if not annonces or dernier is None or min(a.id for a in annonces) <= dernier:
                 break
         else:
-            log.info("[Flux] Le site publie plus vite que le bot ne lit : des annonces ont pu "
-                     "être manquées (augmente pages_max ou baisse intervalle_secondes).")
-        return [a for a in lues.values() if not stock.dans_flux(a.id)]
+            log.info("[%s] Le site publie plus vite que le bot ne lit : des annonces ont pu "
+                     "être manquées (augmente pages_max ou baisse intervalle_secondes).", self.nom)
+        return [a for a in lues.values() if not stock.dans_flux(a.id, self.table)]
 
     def _peut_alerter(self) -> bool:
         maintenant = time.time()
@@ -109,15 +143,16 @@ class Flux:
 
     def passage(self, client, stock, notif) -> int:
         nouvelles = [a for a in self._lire_nouveautes(client, stock) if a.marque or self.sans_marque]
-        avec_jetons = [(a, jetons(a.titre, a.marque, a.taille)) for a in nouvelles]
-        avec_jetons = [(a, j) for a, j in avec_jetons if j]
-        stock.enregistrer_flux(avec_jetons)
+        lignes = [(a, jetons(a.titre, a.marque, a.taille), self.groupe(a)) for a in nouvelles]
+        lignes = [(a, j, g) for a, j, g in lignes if j]
+        stock.enregistrer_flux(lignes, self.table)
 
         trouvees = 0
-        for a, j in avec_jetons:
+        for a, j, groupe in lignes:
             if not passe_filtres(a, self.crit):
                 continue
-            candidats = stock.candidats_flux(a.marque, j, math.ceil(SIMILARITE_MIN * len(j)), self.jours)
+            candidats = stock.candidats_flux(groupe, j, math.ceil(SIMILARITE_MIN * len(j)),
+                                             self.jours, self.table)
             historique = [
                 (id_, prix, a.marque, etat) for id_, prix, etat, catalogue, jb in candidats
                 if (not a.catalogue or not catalogue or catalogue == a.catalogue)
@@ -127,17 +162,19 @@ class Flux:
             if not aff:
                 continue
             if not self._peut_alerter():
-                log.warning("[Flux] Limite de %d alertes/heure atteinte, affaire ignorée : %s",
-                            self.alertes_max, a.url)
+                log.warning("[%s] Limite de %d alertes/heure atteinte, affaire ignorée : %s",
+                            self.nom, self.alertes_max, a.url)
                 continue
             if not verifier_vendeur(aff, client, stock, self.crit):
                 continue
+            if aff.groupe == "toute la recherche":
+                aff.groupe = "même catégorie" if self.par_categorie else "même marque"
             aff.groupe += " · titres proches"
-            notif.envoyer(aff, "Tout Vinted")
-            stock.noter_affaire(aff, "Tout Vinted")
+            notif.envoyer(aff, self.nom)
+            stock.noter_affaire(aff, self.nom)
             self._alertes.append(time.time())
             trouvees += 1
         stock.valider()
-        log.info("[Flux] %d nouvelle(s) annonce(s) analysée(s), %d en mémoire, %d bonne(s) affaire(s).",
-                 len(avec_jetons), stock.taille_flux(), trouvees)
+        log.info("[%s] %d nouvelle(s) annonce(s) analysée(s), %d en mémoire, %d bonne(s) affaire(s).",
+                 self.nom, len(lignes), stock.taille_flux(self.table), trouvees)
         return trouvees

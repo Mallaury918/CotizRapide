@@ -235,7 +235,7 @@ class TestFlux(unittest.TestCase):
         rnd = random.Random(3)
         n = iter(range(1000, 100000))
         conf = {"flux": {"actif": True, "pages_max": 2}, "criteres": {"mots_exclus": ["cassé"]}}
-        flux, stock, notif, client = Flux(conf), Stockage(":memory:"), FauxNotif(), FauxFlux()
+        flux, stock, notif, client = Flux.vinted(conf), Stockage(":memory:"), FauxNotif(), FauxFlux()
 
         # Le marché : des Dunk entre 60 et 90 €, des chaussettes Dunk entre 8 et 12 €
         marche = [item(next(n), rnd.uniform(60, 90), titre="Nike Dunk Low Panda") for _ in range(30)]
@@ -261,7 +261,7 @@ class TestFlux(unittest.TestCase):
 
     def test_lecture_de_plusieurs_pages_si_retard(self):
         stock, client = Stockage(":memory:"), FauxFlux()
-        flux = Flux({"flux": {"pages_max": 3}})
+        flux = Flux.vinted({"flux": {"pages_max": 3}})
         client.lots = [[item(100, 50)]]
         flux.passage(client, stock, FauxNotif())
         # Deux pages entières sans retrouver l'annonce 100 → le bot lit la page suivante
@@ -274,7 +274,7 @@ class TestFlux(unittest.TestCase):
     def test_nettoyage(self):
         stock = Stockage(":memory:")
         a = normaliser(item(1, 50))
-        stock.enregistrer_flux([(a, {"dunk", "low"})])
+        stock.enregistrer_flux([(a, {"dunk", "low"}, a.marque)])
         stock.db.execute("UPDATE flux SET vu_le = 0")
         stock.nettoyer_flux(10)
         self.assertEqual(stock.taille_flux(), 0)
@@ -395,6 +395,61 @@ class TestLeboncoin(unittest.TestCase):
         # Les recherches Vinted et Leboncoin ne partagent pas leur mémoire
         self.assertTrue(stock.connait_recherche("Leboncoin · Switch"))
         self.assertFalse(stock.connait_recherche("Switch"))
+
+
+class FauxLbcFlux(FauxLbc):
+    """Flux des nouveautés de tout Leboncoin : renvoie le lot courant, page par page."""
+
+    def __init__(self):
+        super().__init__([], [])
+        self.lots = []
+
+    def rechercher(self, requete):
+        self.requetes.append(requete)
+        page = requete["offset"] // requete["limit"]
+        return self.lots[page] if page < len(self.lots) else []
+
+
+def ad_cat(id_, prix, titre, categorie, marque=""):
+    ad = ad_lbc(id_, prix, titre=titre, marque=marque)
+    ad["category_id"] = str(categorie)
+    if not marque:
+        ad["attributes"] = [a for a in ad["attributes"] if a["key"] != "brand"]
+    return ad
+
+
+class TestToutLeboncoin(unittest.TestCase):
+    def test_tout_le_site_par_categorie(self):
+        rnd = random.Random(6)
+        n = iter(range(5000, 90000))
+        conf = {"leboncoin": {"actif": True, "tout_le_site": {"actif": True, "comparables_min": 10}}}
+        flux, stock, notif, client = Flux.leboncoin(conf), Stockage(":memory:"), FauxNotif(), FauxLbcFlux()
+        self.assertTrue(flux.actif)
+        marche = [ad_cat(next(n), rnd.uniform(200, 260), "Switch OLED blanche", 43, "Nintendo") for _ in range(20)]
+        marche += [ad_cat(next(n), rnd.uniform(10, 15), "Coque Switch OLED", 43) for _ in range(20)]
+        marche += [ad_cat(next(n), rnd.uniform(40, 60), "Lampe vintage laiton", 39) for _ in range(20)]
+        client.lots = [list(reversed(marche))]
+        flux.passage(client, stock, notif)
+        self.assertEqual(stock.taille_flux("lbc_flux"), 60)   # sans marque acceptées sur Leboncoin
+        self.assertEqual(stock.taille_flux("flux"), 0)        # mémoire séparée de Vinted
+
+        client.lots = [[ad_cat(next(n), 100, "Switch OLED blanche", 43, "Nintendo"),   # affaire
+                        ad_cat(next(n), 12, "Lampe vintage laiton", 39),                # affaire sans marque
+                        ad_cat(next(n), 12, "Lampe vintage laiton", 40),                # autre catégorie
+                        ad_cat(next(n), 3, "Coque Switch OLED", 43)]]                   # pas de marge
+        flux.passage(client, stock, notif)
+        titres = sorted(a.annonce.titre for a in notif.recues)
+        self.assertEqual(titres, ["Lampe vintage laiton", "Switch OLED blanche"])
+        self.assertTrue(all("Tout Leboncoin" not in a.groupe for a in notif.recues))
+        # Toutes les lectures : toutes catégories, sans mots-clés, livraison uniquement
+        for r in client.requetes:
+            self.assertEqual((r["filters"]["category"], r["filters"]["location"]),
+                             ({"id": "0"}, {"shippable": True}))
+            self.assertNotIn("keywords", r["filters"])
+
+    def test_inactif_par_defaut(self):
+        self.assertFalse(Flux.leboncoin({"leboncoin": {"actif": True}}).actif)
+        self.assertFalse(Flux.leboncoin({"leboncoin": {"tout_le_site": {"actif": True}}}).actif)
 
 
 if __name__ == "__main__":

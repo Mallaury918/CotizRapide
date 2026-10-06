@@ -12,21 +12,21 @@ Il fonctionne de deux façons, utilisables ensemble :
 
 ## Leboncoin (toute la France, livraison uniquement)
 
-Le bot surveille aussi Leboncoin, avec des **recherches ciblées** (section `[leboncoin]` du
-`config.toml`). Il ne garde que les **annonces avec livraison**, partout en France, pour
-acheter sans te déplacer. Il fonctionne comme les recherches Vinted : il apprend les prix
-de chaque recherche, puis t'alerte quand une nouvelle annonce est bien moins chère.
+Le bot surveille aussi **tout Leboncoin** (section `[leboncoin.tout_le_site]`) : toutes les
+nouvelles annonces **avec livraison**, toutes catégories, partout en France. Il fonctionne
+comme « tout Vinted », avec une différence : Leboncoin indique la catégorie de chaque
+annonce. Le bot compare donc chaque article aux annonces **de la même catégorie**, au
+titre proche, et de la même marque quand elle est renseignée. Les articles sans marque
+sont acceptés : la catégorie suffit à les comparer.
 
-- **Pourquoi pas « tout Leboncoin » ?** Le site mélange voitures, logements, meubles…, et
-  beaucoup d'annonces n'ont pas de marque. Comparer les prix sans recherche précise
-  donnerait surtout de fausses alertes.
+- **Recherches ciblées** (`[[leboncoin.recherches]]`) : facultatives, en plus de tout le site.
 - **Frais réels :** pour chaque annonce, le bot prend les vrais frais acheteur et le mode
   de livraison le moins cher indiqués par Leboncoin.
 - **Vendeurs :** Leboncoin n'affiche pas de nombre de ventes. Le bot exige à la place
   autant d'avis (5 avis et une note de 4/5 minimum avec les réglages par défaut).
-- **Prudence :** Leboncoin est protégé par DataDome, très sensible aux robots. Le bot fait
-  une lecture par recherche toutes les ~10 minutes. Garde peu de recherches, et s'il
-  affiche « Leboncoin bloque le bot », arrête-le quelques heures.
+- **Prudence :** Leboncoin est protégé par DataDome, très sensible aux robots. Le bot y
+  fait une lecture par minute. S'il affiche « Leboncoin bloque le bot », arrête-le
+  quelques heures, ou passe `intervalle_secondes` à 120.
 - **curl_cffi est obligatoire** pour Leboncoin : il est dans `requirements.txt`.
 
 ## Le mode « tout Vinted »

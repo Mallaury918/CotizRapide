@@ -146,6 +146,11 @@ class VintedClient:
                                 ordre="newest_first" if recentes else "relevance", page=page)
         return [a for a in map(normaliser, items) if a]
 
+    def nouveautes(self, page=1) -> list:
+        """Dernières annonces publiées sur tout le site, déjà normalisées."""
+        items = self.rechercher({"currency": "EUR"}, ordre="newest_first", page=page)
+        return [a for a in map(normaliser, items) if a]
+
     def profil(self, id_) -> Profil:
         return profil_depuis_api(self.utilisateur(id_))
 

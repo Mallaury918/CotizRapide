@@ -46,10 +46,9 @@ benefice_min = 15            # tous les réglages de [criteres] peuvent être re
 comparables_min = 10
 
 # ─── Leboncoin : toute la France, annonces avec livraison uniquement ───────────
-# Leboncoin est très protégé contre les robots (DataDome) : le bot y va doucement, une
-# lecture par recherche toutes les ~10 minutes. Garde un petit nombre de recherches
-# précises. Pas de nombre de ventes sur Leboncoin : le filtre vendeur exige à la place
-# autant d'avis que de ventes (5 avis et 4/5 minimum avec les réglages ci-dessus).
+# Leboncoin est très protégé contre les robots (DataDome) : le bot y va plus doucement
+# que sur Vinted. Pas de nombre de ventes sur Leboncoin : le filtre vendeur exige à la
+# place autant d'avis que de ventes (5 avis et 4/5 minimum avec les réglages ci-dessus).
 [leboncoin]
 actif = true
 livraison_uniquement = true      # uniquement les annonces expédiables, partout en France
@@ -59,8 +58,22 @@ frais_livraison_achat = 6        # utilisé seulement si l'annonce n'indique pas
                                  # sinon le bot prend les vrais frais (protection + port le moins cher)
 # tous les réglages de [criteres] peuvent être remplacés ici ou dans chaque recherche
 
-# Le plus simple : fais ta recherche sur leboncoin.fr (catégorie, mots, prix…), puis
-# copie l'URL dans "url". La localisation de l'URL est ignorée : toute la France.
+# Tout Leboncoin : toutes les nouvelles annonces avec livraison, toutes catégories.
+# Chaque article est comparé aux annonces de la même catégorie, au titre proche (et de
+# la même marque si elle est renseignée). Les premières heures, le bot apprend les prix.
+[leboncoin.tout_le_site]
+actif = true
+intervalle_secondes = 60         # une lecture par minute ; ne descends pas sous 45
+pages_max = 2                    # jusqu'à 2 × 35 annonces par lecture
+historique_jours = 10
+ignorer_sans_marque = false      # sur Leboncoin, la catégorie suffit à comparer
+alertes_max_par_heure = 30
+prix_min = 5
+benefice_min = 15
+comparables_min = 10
+
+# Recherches ciblées (facultatives, en plus de tout le site) : fais ta recherche sur
+# leboncoin.fr, puis copie l'URL dans "url". La localisation est ignorée : toute la France.
 [[leboncoin.recherches]]
 nom = "Switch OLED"
 mots_cles = "switch oled"
@@ -68,6 +81,7 @@ prix_min = 120
 mots_exclus = ["coque", "housse", "étui", "jeu", "jeux", "manette", "boîte seule", "dock seul"]
 remise_min = 0.25
 benefice_min = 30
+actif = false                    # mettre à true pour l'activer
 
 [[leboncoin.recherches]]
 nom = "AirPods Pro"
@@ -76,6 +90,7 @@ prix_min = 60
 mots_exclus = ["boîtier seul", "boitier seul", "écouteur seul", "ecouteur seul", "coque", "faux"]
 remise_min = 0.3
 benefice_min = 25
+actif = false
 
 [[leboncoin.recherches]]
 nom = "Lego Star Wars"
