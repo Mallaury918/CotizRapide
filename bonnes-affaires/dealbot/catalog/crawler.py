@@ -18,6 +18,21 @@ SITEMAP_REFRESH = 24 * 3600
 MAX_SITEMAP_FILES = 60
 MAX_PAGES_KNOWN = 300_000
 BLOCK_STATUSES = {401, 403, 429, 503}
+# Pages de vérification renvoyées par les protections anti-robots (souvent en
+# HTTP 200, à la place de la vraie page) : (motif, nom de la protection).
+# Uniquement des motifs propres aux pages de vérification : les sites protégés
+# chargent aussi le script anti-robot sur leurs pages normales.
+CHALLENGES = [
+    (re.compile(r"captcha-delivery\.com", re.I), "DataDome"),
+    (re.compile(r"_cf_chl_opt|<title>Just a moment\.\.\.</title>|Attention Required! \| Cloudflare", re.I),
+     "Cloudflare"),
+    (re.compile(r"px-captcha", re.I), "PerimeterX"),
+    (re.compile(r"Incapsula incident ID", re.I), "Imperva"),
+    (re.compile(r"<title>Access Denied</title>", re.I), "Akamai"),
+]
+MAX_CHALLENGE_SIZE = 150_000  # une page de vérification est toujours légère
+SITEMAP_GUESSES = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml",
+                   "/sitemap.xml.gz", "/sitemaps/sitemap.xml"]
 MAX_DISCOVERED = 5000  # liens nouveaux mémorisés par passe (mode « liens »)
 # Adresses qui ressemblent à une fiche produit : visitées en priorité.
 PRODUCT_URL = re.compile(r"/p/|/dp/|produit|product|/fiche|/article|\.html?$|\.aspx$|[-_/]\d{5,}", re.I)
@@ -42,6 +57,8 @@ class SiteResult:
     note: str = ""  # diagnostic lisible quand aucun produit n'est trouvé
     blocked: bool = False
     requests: int = 0
+    protection: str = ""  # anti-robot détecté (DataDome, Cloudflare…)
+    first_page: tuple[str, int, int] | None = None  # (url, taille, nb de liens)
     http_errors: dict[int, int] = field(default_factory=dict)  # code -> nb
 
 
@@ -69,16 +86,27 @@ class Crawler:
             self.result.requests += 1
         try:
             out = self.session.request_bytes(url, **kw) if binary else self.session.request(url, **kw)
-            self._blocked_hits = 0
-            return out
         except HttpError as e:
-            self.result.http_errors[e.status] = self.result.http_errors.get(e.status, 0) + 1
-            if e.status in BLOCK_STATUSES:
-                self._blocked_hits += 1
-                if self._blocked_hits >= 3:
-                    self.result.blocked = True
-                    raise _Blocked(f"HTTP {e.status} répétés (protection anti-robots)") from None
+            self._on_http_error(e)
             raise
+        protection = None if binary else _challenge(out)
+        if protection:
+            self.result.protection = protection
+            self._blocked_hits += 1
+            if self._blocked_hits >= 2:
+                self.result.blocked = True
+                raise _Blocked(f"page anti-robot {protection}")
+            raise HttpError(403, url, f"page anti-robot {protection}")
+        self._blocked_hits = 0
+        return out
+
+    def _on_http_error(self, e: HttpError) -> None:
+        self.result.http_errors[e.status] = self.result.http_errors.get(e.status, 0) + 1
+        if e.status in BLOCK_STATUSES:
+            self._blocked_hits += 1
+            if self._blocked_hits >= 3:
+                self.result.blocked = True
+                raise _Blocked(f"HTTP {e.status} répétés (protection anti-robots)") from None
 
     def _allowed(self, url: str) -> bool:
         return self.robots.can_fetch("*", url)
@@ -88,10 +116,13 @@ class Crawler:
         try:
             txt = self._get(self.base + "/robots.txt", counted=False)
         except HttpError as e:
-            self.result.http_errors[e.status] = self.result.http_errors.get(e.status, 0) + 1
+            if self.result.protection:
+                raise _Blocked(f"page anti-robot {self.result.protection} dès le robots.txt") from None
             if e.status in BLOCK_STATUSES:
                 raise _Blocked(f"robots.txt refusé (HTTP {e.status})") from None
             txt = ""  # pas de robots.txt : tout est permis
+        if txt.lstrip().startswith("<"):
+            txt = ""  # page HTML à la place du robots.txt : ignorée
         self.robots.parse(txt.splitlines())
         return list(self.robots.site_maps() or [])
 
@@ -131,13 +162,16 @@ class Crawler:
         self.result.cursor = page
 
     def _refresh_sitemap(self, declared: list[str]) -> None:
-        roots = declared or [self.base + "/sitemap.xml"]
-        queue = [(u, "") for u in roots]
+        # Plan non déclaré dans robots.txt : on essaie les emplacements courants,
+        # jusqu'au premier qui répond.
+        guesses = [] if declared else [self.base + p for p in SITEMAP_GUESSES]
+        queue = [(u, "") for u in declared]
         pages: dict[str, str] = {}
         files = ok = seen = 0
         failure = ""
-        while queue and files < MAX_SITEMAP_FILES and len(pages) < MAX_PAGES_KNOWN:
-            url, _ = queue.pop(0)
+        while (queue or (guesses and not ok)) and files < MAX_SITEMAP_FILES \
+                and len(pages) < MAX_PAGES_KNOWN:
+            url, _ = queue.pop(0) if queue else (guesses.pop(0), "")
             files += 1
             try:
                 # Les fichiers sitemap ne comptent pas dans le quota de pages produit.
@@ -149,6 +183,7 @@ class Crawler:
             except (ValueError, OSError, EOFError, ET.ParseError) as e:
                 failure = f"fichier illisible ({type(e).__name__}) : {url}"
                 continue
+            guesses.clear()
             if kind == "index":
                 queue += sitemap.pick_children(entries, self.site.path_prefix)
             else:
@@ -186,6 +221,8 @@ class Crawler:
                 except HttpError:
                     continue
                 found, links = parse_page(html, url, self.site.sellers, self.source)
+                if self.result.first_page is None:
+                    self.result.first_page = (url, len(html), len(set(links)))
                 self.result.checked[url] = bool(found)
                 self.result.listings += found
                 if not discover:
@@ -211,6 +248,11 @@ class Crawler:
         read = sum(1 for _ in self.result.checked)
         if read:
             parts.append(f"{read} pages lues sans prix exploitable")
+        if self.result.protection:
+            parts.append(f"protection anti-robot {self.result.protection} détectée")
+        if self.result.first_page and read <= 3:
+            url, size, links = self.result.first_page
+            parts.append(f"1re page : {size // 1024} Ko, {links} liens")
         if self.result.http_errors:
             parts.append("erreurs " + ", ".join(f"HTTP {c} x{n}"
                                                 for c, n in sorted(self.result.http_errors.items())))
@@ -245,6 +287,15 @@ class Crawler:
             self.result.error = f"{type(e).__name__}: {e}"
         self._diagnose()
         return self.result
+
+
+def _challenge(html: str) -> str | None:
+    if len(html) > MAX_CHALLENGE_SIZE:
+        return None
+    for pattern, name in CHALLENGES:
+        if pattern.search(html):
+            return name
+    return None
 
 
 class _BudgetExhausted(Exception):

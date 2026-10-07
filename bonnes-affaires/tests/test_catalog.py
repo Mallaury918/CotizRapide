@@ -174,6 +174,36 @@ class FallbackTest(unittest.TestCase):
         self.assertIn("plan du site inaccessible (HTTP 404", r.note)
         self.assertIn("1 pages lues sans prix", r.note)
 
+    def test_challenge_page_means_blocked(self):
+        site = Site(name="Protégé", domain="www.p.fr")
+        challenge = '<html><script src="https://geo.captcha-delivery.com/captcha/"></script></html>'
+        routes = {"https://www.p.fr/robots.txt": challenge}
+        r = Crawler(site, SiteState(mode="sitemap"), budget=10, session=FakeSession(routes)).run([])
+        self.assertTrue(r.blocked)
+        self.assertIn("DataDome", r.error)
+
+    def test_normal_page_with_protection_script_is_not_blocked(self):
+        site = Site(name="Normal", domain="www.n.fr")
+        page = ('<script src="https://js.datadome.co/tags.js"></script>'
+                '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>'
+                + product_page("Robot", 299))
+        routes = {"https://www.n.fr/robots.txt": "", "https://www.n.fr/": page}
+        r = Crawler(site, SiteState(mode="sitemap"), budget=10, session=FakeSession(routes)).run([])
+        self.assertFalse(r.blocked)
+        self.assertEqual([l.title for l in r.listings], ["Robot"])
+
+    def test_sitemap_found_at_other_usual_location(self):
+        site = Site(name="Index", domain="www.i.fr")
+        urlset = (b'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                  b'<url><loc>https://www.i.fr/p/1</loc></url></urlset>')
+        routes = {"https://www.i.fr/robots.txt": "", "https://www.i.fr/sitemap_index.xml": urlset,
+                  "https://www.i.fr/p/1": product_page("Casque", 120)}
+        session = FakeSession(routes)
+        r = Crawler(site, SiteState(mode="sitemap"), budget=10, session=session).run([])
+        self.assertEqual(r.mode, "sitemap")
+        self.assertEqual([l.title for l in r.listings], ["Casque"])
+        self.assertNotIn("https://www.i.fr/sitemap-index.xml", session.calls)  # arrêt au 1er trouvé
+
     def test_microdata_fallback(self):
         page = ('<title>Aspirateur X | Boutique</title><h1 itemprop="name" content="Aspirateur X"></h1>'
                 '<span itemprop="price" content="249.90"></span><meta itemprop="gtin13" content="3760000000011">')
