@@ -34,6 +34,28 @@ def show_sites(settings) -> None:
     store.close()
 
 
+def auto_chat_id(settings, config_path) -> None:
+    """chat_id vide : on le récupère auprès de Telegram et on l'enregistre."""
+    from .telegram_setup import find_chat_id, save_chat_id
+
+    print("chat_id vide : recherche automatique auprès de Telegram…")
+    try:
+        found = find_chat_id(settings.telegram_token)
+    except Exception as e:
+        print(f"Impossible de joindre Telegram ({e}). Vérifiez le token et votre connexion.")
+        return
+    if not found:
+        print("Aucun message trouvé : ouvrez votre bot dans Telegram, envoyez-lui « salut », "
+              "puis relancez.")
+        return
+    chat_id, name = found
+    settings.telegram_chat_id = chat_id
+    if save_chat_id(config_path, chat_id):
+        print(f"chat_id trouvé ({name}) : {chat_id} — enregistré dans {config_path}.")
+    else:
+        print(f"chat_id trouvé : {chat_id}. Copiez-le dans config.toml (chat_id = \"{chat_id}\").")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="dealbot", description="Alertes bonnes affaires / erreurs de prix")
     p.add_argument("-c", "--config", default="config.toml", help="fichier de configuration")
@@ -47,6 +69,8 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     settings = config.load(args.config)
+    if settings.telegram_token and not settings.telegram_chat_id:
+        auto_chat_id(settings, args.config)
     if args.cmd == "test-telegram":
         if not (settings.telegram_token and settings.telegram_chat_id):
             print("Renseignez [telegram] token et chat_id dans la configuration.")

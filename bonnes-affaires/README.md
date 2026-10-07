@@ -69,10 +69,9 @@ python3 -m dealbot sites             # état de chaque boutique (ok, en pause…
 
 1. Sur Telegram, écrivez à **@BotFather** → `/newbot` → récupérez le *token*.
 2. Envoyez un message quelconque à votre nouveau bot.
-3. Ouvrez `https://api.telegram.org/bot<TOKEN>/getUpdates` : le champ
-   `"chat":{"id": ...}` est votre `chat_id`.
-4. Mettez les deux dans `config.toml` (ou dans les variables d'environnement
-   `DEALBOT_TELEGRAM_TOKEN` / `DEALBOT_TELEGRAM_CHAT_ID`).
+3. Mettez le token dans `config.toml` (ou dans la variable d'environnement
+   `DEALBOT_TELEGRAM_TOKEN`) et laissez `chat_id` vide : au lancement, le bot
+   le récupère auprès de Telegram et l'enregistre dans `config.toml`.
 
 ### Le faire tourner 24h/24
 

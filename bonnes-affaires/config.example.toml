@@ -12,7 +12,7 @@ currency = "EUR"
 
 [telegram]
 token = ""     # donné par @BotFather
-chat_id = ""   # votre identifiant (voir README)
+chat_id = ""   # laissez vide : trouvé automatiquement au premier lancement
 
 [ebay]
 client_id = ""        # clé gratuite : https://developer.ebay.com

@@ -10,13 +10,9 @@
 ## 2. Créer votre bot Telegram (une seule fois)
 
 1. Dans Telegram, cherchez **@BotFather** et envoyez `/newbot`.
-2. Choisissez un nom (ex. « Mes bonnes affaires ») puis un identifiant
-   finissant par `bot` (ex. `mes_affaires_bot`).
+2. Choisissez un nom puis un identifiant finissant par `bot`.
 3. BotFather vous donne un **token** du type `7123456789:AAH...` : copiez-le.
-4. Ouvrez votre nouveau bot et envoyez-lui un message (« salut »).
-5. Dans votre navigateur, ouvrez (en remplaçant `VOTRE_TOKEN`) :
-   `https://api.telegram.org/botVOTRE_TOKEN/getUpdates`
-   Repérez `"chat":{"id":123456789` : ce nombre est votre **chat_id**.
+4. Ouvrez votre nouveau bot, appuyez sur **Démarrer** et envoyez-lui « salut ».
 
 ## 3. Configurer
 
@@ -24,15 +20,16 @@
   l'ouvre dans le Bloc-notes.
 - **Mac / Linux** : dans un terminal, dans ce dossier : `./lancer.sh`
 
-Dans `config.toml`, remplissez seulement :
+Dans `config.toml`, collez seulement votre token :
 
 ```toml
 [telegram]
 token = "7123456789:AAH..."
-chat_id = "123456789"
+chat_id = ""
 ```
 
-Enregistrez. Le reste peut rester tel quel.
+Laissez `chat_id` vide : **le bot le trouve et l'enregistre tout seul** au
+lancement suivant (grâce au message « salut » que vous lui avez envoyé).
 
 ## 4. Tester Telegram
 
