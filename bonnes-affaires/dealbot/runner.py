@@ -115,7 +115,14 @@ def run_catalog(settings: Settings, store: Store, notifiers: list,
         for fut in as_completed(futures):
             r = fut.result()
             _apply_site_result(store, r, time.time())
-            status = f"bloqué ({r.error})" if r.blocked else (r.error or "ok")
+            if r.blocked:
+                status = f"bloqué ({r.error}), mis en pause"
+            elif r.error:
+                status = f"erreur ({r.error})"
+            elif not r.listings:
+                status = f"aucun produit — {r.note}"
+            else:
+                status = "ok"
             print(f"[catalogue] {r.site.name} : {len(r.listings)} produits, "
                   f"{r.requests} pages ({r.mode or '?'}) — {status}")
             deals = analyze_catalog(r.listings, store, settings, by_source)

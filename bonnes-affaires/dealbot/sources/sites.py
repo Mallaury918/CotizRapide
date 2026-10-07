@@ -44,26 +44,40 @@ class _Collector(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.blocks: list[str] = []
         self.meta: dict[str, str] = {}
-        self._in_ld = False
+        self.itemprops: dict[str, list[str]] = {}  # microdonnées schema.org
+        self.links: list[str] = []
+        self.title = ""
+        self._in_ld = self._in_title = False
         self._buf: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag == "script" and (a.get("type") or "").lower() == "application/ld+json":
             self._in_ld, self._buf = True, []
-        elif tag == "meta":
-            key = a.get("property") or a.get("name") or a.get("itemprop")
+        elif tag == "title":
+            self._in_title = True
+        elif tag == "a" and a.get("href"):
+            self.links.append(a["href"])
+        if tag == "meta":
+            key = a.get("property") or a.get("name")
             if key and a.get("content") is not None:
                 self.meta.setdefault(key.lower(), a["content"])
+        prop = a.get("itemprop")
+        if prop and a.get("content") is not None:
+            self.itemprops.setdefault(prop.lower(), []).append(a["content"])
 
     def handle_data(self, data):
         if self._in_ld:
             self._buf.append(data)
+        elif self._in_title:
+            self.title += data
 
     def handle_endtag(self, tag):
         if tag == "script" and self._in_ld:
             self.blocks.append("".join(self._buf))
             self._in_ld = False
+        elif tag == "title":
+            self._in_title = False
 
 
 def parse_price(value) -> float | None:
@@ -163,8 +177,23 @@ def _gtin(node: dict) -> str:
 
 def extract_listings(page: str, page_url: str, sellers: list[str] | None = None,
                      source: str = "") -> list[Listing]:
+    return parse_page(page, page_url, sellers, source)[0]
+
+
+def parse_page(page: str, page_url: str, sellers: list[str] | None = None,
+               source: str = "") -> tuple[list[Listing], list[str]]:
+    """Renvoie (produits trouvés, liens de la page en adresses complètes)."""
     parser = _Collector()
-    parser.feed(page)
+    try:
+        parser.feed(page)
+    except Exception:  # HTML très cassé : on garde ce qui a pu être lu
+        pass
+    links = []
+    for href in parser.links:
+        href = href.strip()
+        if href.startswith(("javascript:", "mailto:", "tel:", "#")):
+            continue
+        links.append(urllib.parse.urljoin(page_url, href).split("#", 1)[0])
     host = urllib.parse.urlparse(page_url).netloc.removeprefix("www.")
     source = source or f"site:{host}"
     found: dict[str, Listing] = {}
@@ -197,16 +226,25 @@ def extract_listings(page: str, page_url: str, sellers: list[str] | None = None,
                 gtin=gtin, seller=seller, seller_checked=bool(seller and sellers),
             ))
 
-    # Repli : balises meta Open Graph (pages produit sans JSON-LD). Jamais sur une
-    # marketplace filtrée : on ne saurait pas qui vend.
+    # Repli : balises Open Graph ou microdonnées (pages produit sans JSON-LD).
+    # Jamais sur une marketplace filtrée : on ne saurait pas qui vend.
     if not saw_product and not sellers:
+        props = parser.itemprops
         price = parse_price(parser.meta.get("product:price:amount") or parser.meta.get("og:price:amount"))
-        title = parser.meta.get("og:title", "")
+        # Un seul prix en microdonnées = une fiche produit (plusieurs = page liste).
+        if price is None and len(set(props.get("price", []))) == 1:
+            price = parse_price(props["price"][0])
+        title = (parser.meta.get("og:title") or (props.get("name") or [""])[0]
+                 or parser.title).strip()
         if price and title:
+            gtin = next((re.sub(r"\D", "", v[0]) for k, v in props.items()
+                         if k in ("gtin13", "gtin", "gtin12", "gtin14", "gtin8", "ean")), "")
             found[page_url] = Listing(
                 source=source, item_id=page_url, title=title, price=price,
                 currency=(parser.meta.get("product:price:currency")
-                          or parser.meta.get("og:price:currency") or "EUR"),
+                          or parser.meta.get("og:price:currency")
+                          or (props.get("pricecurrency") or ["EUR"])[0]),
                 url=page_url, image=parser.meta.get("og:image", ""),
+                gtin=gtin if 8 <= len(gtin) <= 14 else "",
             )
-    return list(found.values())
+    return list(found.values()), links

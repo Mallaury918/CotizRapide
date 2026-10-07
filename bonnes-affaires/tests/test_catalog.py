@@ -143,6 +143,48 @@ class CrawlerTest(unittest.TestCase):
         self.assertEqual(l.price, 49.9)
 
 
+class FallbackTest(unittest.TestCase):
+    def test_follows_links_when_no_sitemap(self):
+        site = Site(name="Boutique", domain="www.b.fr")
+        home = ('<a href="/rayon/tv">TV</a> <a href="https://www.b.fr/tv-oled-55-123456.html">x</a>'
+                '<a href="https://ailleurs.fr/p/1">pub</a> <a href="/compte/login">c</a>')
+        routes = {
+            "https://www.b.fr/robots.txt": "User-agent: *\nDisallow: /compte/\n",
+            "https://www.b.fr/sitemap.xml": 404,
+            "https://www.b.fr/": home,
+            "https://www.b.fr/tv-oled-55-123456.html": product_page("TV OLED 55", 899),
+            "https://www.b.fr/rayon/tv": '<a href="/tv-qled-65-654321.html">y</a>',
+            "https://www.b.fr/tv-qled-65-654321.html": product_page("TV QLED 65", 1099, gtin="3700000000002"),
+        }
+        session = FakeSession(routes)
+        r = Crawler(site, SiteState(mode="sitemap"), budget=20, session=session).run([])
+        self.assertEqual(r.mode, "liens")
+        self.assertEqual(sorted(l.title for l in r.listings), ["TV OLED 55", "TV QLED 65"])
+        # La fiche produit passe avant la page rayon ; ni lien externe ni page interdite.
+        visited = [u for u in session.calls if u.startswith("https://www.b.fr/") and "robots" not in u
+                   and "sitemap" not in u]
+        self.assertEqual(visited[:2], ["https://www.b.fr/", "https://www.b.fr/tv-oled-55-123456.html"])
+        self.assertNotIn("https://www.b.fr/compte/login", session.calls)
+        self.assertNotIn("https://ailleurs.fr/p/1", [u for u, _ in r.pages])
+
+    def test_diagnostic_when_nothing_found(self):
+        site = Site(name="Vide", domain="www.v.fr")
+        routes = {"https://www.v.fr/robots.txt": "", "https://www.v.fr/": "<p>rien</p>"}
+        r = Crawler(site, SiteState(mode="sitemap"), budget=10, session=FakeSession(routes)).run([])
+        self.assertIn("plan du site inaccessible (HTTP 404", r.note)
+        self.assertIn("1 pages lues sans prix", r.note)
+
+    def test_microdata_fallback(self):
+        page = ('<title>Aspirateur X | Boutique</title><h1 itemprop="name" content="Aspirateur X"></h1>'
+                '<span itemprop="price" content="249.90"></span><meta itemprop="gtin13" content="3760000000011">')
+        [l] = extract_listings(page, "https://www.b.fr/aspi")
+        self.assertEqual((l.title, l.price, l.gtin), ("Aspirateur X", 249.9, "3760000000011"))
+
+    def test_microdata_ignored_on_list_pages(self):
+        page = '<span itemprop="price" content="10"></span><span itemprop="price" content="20"></span><title>Rayon</title>'
+        self.assertEqual(extract_listings(page, "https://www.b.fr/rayon"), [])
+
+
 class SellerFilterTest(unittest.TestCase):
     def test_marketplace_keeps_only_allowed_seller(self):
         page = product_page("TV", 500, seller="Cdiscount")
