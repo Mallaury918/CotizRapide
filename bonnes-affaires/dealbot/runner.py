@@ -85,9 +85,15 @@ def _apply_site_result(store: Store, r: SiteResult, now: float) -> None:
         store.update_site(domain, mode=r.mode, failures=failures, blocked_until=now + pause,
                           last_error=r.error)
     else:
-        fields = {"mode": r.mode, "cursor": r.cursor, "last_error": r.error}
+        fields = {"mode": r.mode, "cursor": r.cursor, "last_error": r.error or r.note}
         if r.listings:
             fields.update(failures=0, last_ok=now, products_seen=row["products_seen"] + len(r.listings))
+        elif r.error:
+            # Site qui ne répond pas (délai dépassé…) : pause après 3 passes en échec.
+            failures = row["failures"] + 1
+            fields["failures"] = failures
+            if failures >= 3:
+                fields["blocked_until"] = now + min(BLOCK_BASE * 2 ** (failures - 3), BLOCK_MAX)
         store.update_site(domain, **fields)
 
 
@@ -119,6 +125,8 @@ def run_catalog(settings: Settings, store: Store, notifiers: list,
                 status = f"bloqué ({r.error}), mis en pause"
             elif r.error:
                 status = f"erreur ({r.error})"
+                if "timed out" in r.error:
+                    status = "ne répond pas (délai dépassé) — souvent un blocage des robots"
             elif not r.listings:
                 status = f"aucun produit — {r.note}"
             else:

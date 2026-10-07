@@ -204,6 +204,18 @@ class FallbackTest(unittest.TestCase):
         self.assertEqual([l.title for l in r.listings], ["Casque"])
         self.assertNotIn("https://www.i.fr/sitemap-index.xml", session.calls)  # arrêt au 1er trouvé
 
+    def test_links_mode_revisits_home_and_forgets_404(self):
+        site = Site(name="Liens", domain="www.l.fr")
+        routes = {"https://www.l.fr/robots.txt": "",
+                  "https://www.l.fr/": '<a href="/p/neuf-123456.html">n</a>',
+                  "https://www.l.fr/p/neuf-123456.html": product_page("Nouveau", 50)}
+        session = FakeSession(routes)
+        r = Crawler(site, SiteState(mode="liens"), budget=10, session=session).run(
+            ["https://www.l.fr/disparue"])
+        self.assertEqual(session.calls[1], "https://www.l.fr/")  # accueil relu en premier
+        self.assertEqual(r.checked["https://www.l.fr/disparue"], False)  # 404 oubliée
+        self.assertEqual([l.title for l in r.listings], ["Nouveau"])
+
     def test_microdata_fallback(self):
         page = ('<title>Aspirateur X | Boutique</title><h1 itemprop="name" content="Aspirateur X"></h1>'
                 '<span itemprop="price" content="249.90"></span><meta itemprop="gtin13" content="3760000000011">')
@@ -284,6 +296,25 @@ class CatalogAnalyzeTest(unittest.TestCase):
         routes["https://www.shop.fr/robots.txt"] = 403
         run_catalog(s, self.store, [Collect()], session_factory=lambda: FakeSession(routes))
         self.assertGreater(self.store.site_row("www.shop.fr")["blocked_until"], 0)
+
+
+class TimeoutPauseTest(unittest.TestCase):
+    def test_site_paused_after_three_failed_passes(self):
+        store = Store(":memory:")
+        s = Settings()
+        site = Site(name="Lent", domain="www.lent.fr")
+        s.catalog.sites = [site]
+
+        class Slow:
+            def request(self, url, **kw):
+                raise OSError("timed out")
+            request_bytes = request
+
+        for _ in range(3):
+            run_catalog(s, store, [], session_factory=Slow)
+        row = store.site_row("www.lent.fr")
+        self.assertEqual(row["failures"], 3)
+        self.assertGreater(row["blocked_until"], 0)
 
 
 class TrustTest(unittest.TestCase):

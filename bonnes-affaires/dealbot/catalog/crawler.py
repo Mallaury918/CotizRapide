@@ -218,7 +218,9 @@ class Crawler:
                     continue
                 try:
                     html = self._get(url)
-                except HttpError:
+                except HttpError as e:
+                    if e.status in (404, 410):
+                        self.result.checked[url] = False  # page disparue : on l'oublie
                     continue
                 found, links = parse_page(html, url, self.site.sellers, self.source)
                 if self.result.first_page is None:
@@ -276,7 +278,10 @@ class Crawler:
                     # Plan B : pas de plan du site exploitable, on suit les liens
                     # depuis la page d'accueil comme le ferait un visiteur.
                     self.result.mode = "liens"
-                    to_check = [self.base + "/"]
+                if self.result.mode == "liens":
+                    # L'accueil est relu à chaque passe : c'est lui qui donne les
+                    # nouveautés et les liens vers les rayons.
+                    to_check = [self.base + "/"] + [u for u in to_check if u != self.base + "/"]
                 self._check_pages(to_check, discover=self.result.mode == "liens")
         except _BudgetExhausted:
             pass
