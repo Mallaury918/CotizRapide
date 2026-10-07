@@ -7,10 +7,16 @@ from pathlib import Path
 from .http import Session
 
 
-def find_chat_id(token: str, session: Session | None = None) -> tuple[str, str] | None:
-    """Renvoie (chat_id, nom) de la dernière personne qui a écrit au bot."""
-    session = session or Session(min_delay=0)
-    data = session.get_json(f"https://api.telegram.org/bot{token}/getUpdates")
+def find_chat_id(token: str, session: Session | None = None,
+                 wait: int = 0) -> tuple[str, str] | None:
+    """Renvoie (chat_id, nom) de la dernière personne qui a écrit au bot.
+
+    `wait` > 0 : si aucun message n'est en attente, Telegram garde la requête
+    ouverte jusqu'à `wait` secondes et répond dès qu'un message arrive.
+    """
+    session = session or Session(min_delay=0, timeout=wait + 15)
+    params = {"timeout": wait} if wait else None
+    data = session.get_json(f"https://api.telegram.org/bot{token}/getUpdates", params=params)
     for update in reversed(data.get("result", [])):
         for key in ("message", "edited_message", "my_chat_member", "channel_post"):
             chat = (update.get(key) or {}).get("chat")

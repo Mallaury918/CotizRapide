@@ -45,8 +45,19 @@ def auto_chat_id(settings, config_path) -> None:
         print(f"Impossible de joindre Telegram ({e}). Vérifiez le token et votre connexion.")
         return
     if not found:
-        print("Aucun message trouvé : ouvrez votre bot dans Telegram, envoyez-lui « salut », "
-              "puis relancez.")
+        print("\n>>> Ouvrez votre bot dans Telegram et envoyez-lui « salut » MAINTENANT.\n"
+              ">>> J'attends votre message (2 minutes maximum)…")
+        try:
+            for _ in range(4):  # 4 x 30 s
+                found = find_chat_id(settings.telegram_token, wait=30)
+                if found:
+                    break
+        except Exception as e:
+            print(f"Impossible de joindre Telegram ({e}).")
+            return
+    if not found:
+        print("Toujours aucun message reçu. Vérifiez que vous écrivez bien au bot dont vous "
+              "avez mis le token dans config.toml, puis relancez.")
         return
     chat_id, name = found
     settings.telegram_chat_id = chat_id
@@ -72,9 +83,11 @@ def main(argv=None) -> int:
     if settings.telegram_token and not settings.telegram_chat_id:
         auto_chat_id(settings, args.config)
     if args.cmd == "test-telegram":
-        if not (settings.telegram_token and settings.telegram_chat_id):
-            print("Renseignez [telegram] token et chat_id dans la configuration.")
+        if not settings.telegram_token:
+            print("Renseignez [telegram] token dans config.toml.")
             return 1
+        if not settings.telegram_chat_id:
+            return 1  # le message d'explication vient d'être affiché
         TelegramNotifier(settings.telegram_token, settings.telegram_chat_id).send_text(
             "✅ DealBot est bien connecté : les bonnes affaires arriveront ici.")
         print("Message envoyé.")

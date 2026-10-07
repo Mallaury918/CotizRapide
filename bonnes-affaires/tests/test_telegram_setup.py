@@ -9,8 +9,8 @@ class FakeSession:
     def __init__(self, data):
         self.data = data
 
-    def get_json(self, url, **kw):
-        self.url = url
+    def get_json(self, url, params=None, **kw):
+        self.url, self.params = url, params
         return self.data
 
 
@@ -23,6 +23,11 @@ class TelegramSetupTest(unittest.TestCase):
         ]})
         self.assertEqual(find_chat_id("TOKEN", s), ("987654321", "Mallaury"))
         self.assertTrue(s.url.endswith("/botTOKEN/getUpdates"))
+
+    def test_long_polling(self):
+        s = FakeSession({"ok": True, "result": []})
+        find_chat_id("T", s, wait=30)
+        self.assertEqual(s.params, {"timeout": 30})
 
     def test_no_message(self):
         self.assertIsNone(find_chat_id("T", FakeSession({"ok": True, "result": []})))
