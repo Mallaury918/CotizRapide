@@ -71,6 +71,7 @@ class Affaire:
     benefice: float       # marge estimée à la revente
     suspect: bool         # prix "trop beau pour être vrai"
     profil: Optional["Profil"] = None
+    fourchette: tuple = ()  # (prix le plus bas, prix le plus haut) des annonces comparées
 
 
 @dataclass
@@ -185,25 +186,75 @@ def sans_extremes(valeurs: list) -> list:
     return [x for x in valeurs if q1 - marge <= x <= q3 + marge]
 
 
+def niveau_etat(etat: str) -> str:
+    """Regroupe les états proches : « neuf », « occasion » (très bon / bon) ou « usé »."""
+    e = simplifier(etat)
+    if "neuf" in e:
+        return "neuf"
+    if "satisfaisant" in e or "abime" in e or "pieces" in e:
+        return "usé"
+    if "bon" in e:
+        return "occasion"
+    return ""
+
+
+_TAILLE_ENFANT = re.compile(r"\b(ans|an|mois|cm)\b")
+
+
+def gabarit(taille: str) -> str:
+    """« enfant » ou « adulte » d'après la taille ou la pointure (« » si inconnue)."""
+    t = simplifier(taille or "")
+    if not t:
+        return ""
+    if _TAILLE_ENFANT.search(t):
+        return "enfant"
+    nombre = re.fullmatch(r"\s*(\d{2})(?:[.,]5)?\s*", t)
+    if nombre:
+        return "enfant" if int(nombre.group(1)) < 34 else "adulte"
+    return "adulte"
+
+
+def tailles_compatibles(ta: str, tb) -> bool:
+    """Même gabarit (enfant/adulte) ; tailles chiffrées à 2 points d'écart au plus.
+
+    `tb` vaut None pour les annonces mémorisées avant que le bot ne retienne la taille :
+    on ne les compare qu'aux articles sans taille."""
+    if tb is None:
+        return not ta
+    ga, gb = gabarit(ta), gabarit(tb)
+    if ga and gb and ga != gb:
+        return False
+    na = re.fullmatch(r"\s*(\d{2}(?:[.,]5)?)\s*", ta or "")
+    nb = re.fullmatch(r"\s*(\d{2}(?:[.,]5)?)\s*", tb or "")
+    if na and nb:
+        return abs(float(na.group(1).replace(",", ".")) - float(nb.group(1).replace(",", "."))) <= 2
+    return True
+
+
 def prix_reference(a: Annonce, historique: list, crit: dict):
     """Cherche le groupe d'annonces comparables le plus précis ayant assez d'éléments.
 
-    `historique` : liste de (id, prix, marque, etat). Renvoie (référence, nb, groupe) ou None.
+    `historique` : liste de (id, prix, marque, etat). On ne mélange jamais des états
+    éloignés : un article usé n'est pas comparé à des articles neufs.
+    Renvoie (référence, nb, groupe, (prix min, prix max)) ou None.
     """
     mini = crit.get("comparables_min", 15)
-    autres = [h for h in historique if h[0] != a.id]
+    niveau = niveau_etat(a.etat)
+    autres = [h for h in historique if h[0] != a.id and niveau_etat(h[3]) == niveau]
+    libelle_niveau = {"neuf": "neuf", "occasion": "bon état", "usé": "état usé"}.get(niveau, "état inconnu")
+    meme_marque = [h for h in autres if h[2] == a.marque] if a.marque else []
     groupes = []
     if a.marque and a.etat:
-        groupes.append((f"{a.marque} · {a.etat}",
-                        [h[1] for h in autres if h[2] == a.marque and h[3] == a.etat]))
+        groupes.append((f"{a.marque} · {a.etat}", [h[1] for h in meme_marque if h[3] == a.etat]))
     if a.marque:
-        groupes.append((a.marque, [h[1] for h in autres if h[2] == a.marque]))
-    groupes.append(("toute la recherche", [h[1] for h in autres]))
+        groupes.append((f"{a.marque} · {libelle_niveau}", [h[1] for h in meme_marque]))
+    groupes.append((libelle_niveau, [h[1] for h in autres]))
 
     for nom, prix in groupes:
         prix = sans_extremes(prix)
         if len(prix) >= mini:
-            return percentile(prix, crit.get("percentile_reference", 40)), len(prix), nom
+            return (percentile(prix, crit.get("percentile_reference", 40)), len(prix), nom,
+                    (min(prix), max(prix)))
     return None
 
 
@@ -213,7 +264,7 @@ def evaluer(a: Annonce, historique: list, crit: dict) -> Optional[Affaire]:
     ref = prix_reference(a, historique, crit)
     if ref is None:
         return None
-    reference, nb, groupe = ref
+    reference, nb, groupe, fourchette = ref
     port = a.livraison if a.livraison is not None else crit.get("frais_livraison_achat", 0)
     cout = a.prix_total + port
     remise = 1 - cout / reference
@@ -225,6 +276,7 @@ def evaluer(a: Annonce, historique: list, crit: dict) -> Optional[Affaire]:
         annonce=a, reference=reference, nb_comparables=nb, groupe=groupe,
         cout_total=round(cout, 2), remise=remise, benefice=benefice,
         suspect=a.prix < reference * crit.get("ratio_suspect", 0.2),
+        fourchette=fourchette,
     )
 
 

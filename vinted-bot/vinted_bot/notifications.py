@@ -27,8 +27,9 @@ def message(aff, recherche: str) -> str:
     lignes = [
         f"🔥 <b>-{aff.remise:.0%}</b> · {html.escape(a.titre)}",
         f"💶 <b>{euros(a.prix)}</b> (coût réel ≈ {euros(aff.cout_total)} avec protection + livraison)",
-        f"📊 Prix du marché ≈ {euros(aff.reference)} "
-        f"({aff.nb_comparables} annonces · {html.escape(aff.groupe)})",
+        f"📊 Prix du marché ≈ {euros(aff.reference)} ({aff.nb_comparables} annonces"
+        + (f" de {euros(aff.fourchette[0])} à {euros(aff.fourchette[1])}" if aff.fourchette else "")
+        + f" · {html.escape(aff.groupe)})",
         f"💰 Bénéfice estimé : <b>+{euros(aff.benefice)}</b>",
     ]
     details = " · ".join(x for x in (a.marque, a.taille and f"Taille {a.taille}", a.etat) if x)

@@ -85,9 +85,21 @@ class TestAnalyse(unittest.TestCase):
     def test_pas_assez_de_comparables(self):
         self.assertIsNone(evaluer(normaliser(item(999, 25)), self.hist[:5], CRIT))
 
-    def test_repli_sur_la_marque(self):
-        aff = evaluer(normaliser(item(999, 25, etat="Neuf avec étiquette")), self.hist, CRIT)
-        self.assertEqual(aff.groupe, "Nike")
+    def test_jamais_compare_a_un_autre_etat(self):
+        # Que des « Très bon état » en mémoire : un article neuf n'est pas comparé à eux
+        self.assertIsNone(evaluer(normaliser(item(999, 25, etat="Neuf avec étiquette")), self.hist, CRIT))
+        # « Bon état » est proche de « Très bon état » : comparaison autorisée
+        aff = evaluer(normaliser(item(999, 25, etat="Bon état")), self.hist, CRIT)
+        self.assertEqual(aff.groupe, "Nike · bon état")
+
+    def test_usé_pas_compare_au_neuf(self):
+        neufs = [(i, 100.0, "Nike", "Neuf avec étiquette") for i in range(1, 30)]
+        self.assertIsNone(evaluer(normaliser(item(999, 30, etat="Satisfaisant")), neufs, CRIT))
+
+    def test_fourchette_de_prix(self):
+        aff = evaluer(normaliser(item(999, 25)), self.hist, CRIT)
+        self.assertLessEqual(aff.fourchette[0], aff.reference)
+        self.assertGreaterEqual(aff.fourchette[1], aff.reference)
 
 
 class TestUrl(unittest.TestCase):
@@ -230,6 +242,57 @@ class TestFlux(unittest.TestCase):
         self.assertFalse(comparables({"coque", "iphone", "15"}, {"iphone", "15", "128"}))
         self.assertFalse(comparables({"pull", "col", "rond"}, {"polo", "col", "rond"}))
         self.assertFalse(comparables({"air", "max", "90"}, dunk))
+        # Modèle exact : variantes et numéros identiques
+        self.assertFalse(comparables({"air", "max", "90", "blanche"}, {"air", "max", "95", "blanche"}))
+        self.assertFalse(comparables({"dunk", "low", "panda"}, {"dunk", "high", "panda"}))
+        self.assertFalse(comparables({"iphone", "13", "128go"}, {"iphone", "13", "pro", "128go"}))
+        self.assertTrue(comparables({"air", "max", "90", "blanche"}, {"air", "max", "90"}))
+
+    def test_tailles(self):
+        from vinted_bot.analyse import gabarit, tailles_compatibles
+        self.assertEqual((gabarit("28"), gabarit("42.5"), gabarit("10 ans / 140 cm"), gabarit("M")),
+                         ("enfant", "adulte", "enfant", "adulte"))
+        self.assertFalse(tailles_compatibles("28", "42"))      # pointure enfant ≠ adulte
+        self.assertTrue(tailles_compatibles("42", "43.5"))     # pointures voisines
+        self.assertFalse(tailles_compatibles("42", "46"))
+        self.assertFalse(tailles_compatibles("M", "8 ans"))
+        self.assertTrue(tailles_compatibles("M", "L"))
+        self.assertFalse(tailles_compatibles("42", None))      # annonce mémorisée sans taille
+        self.assertTrue(tailles_compatibles("", None))
+
+    def test_flux_ecarte_pointures_enfant(self):
+        rnd = random.Random(8)
+        n = iter(range(1000, 9000))
+        conf = {"flux": {"actif": True, "pages_max": 1}}
+        flux, stock, notif, client = Flux.vinted(conf), Stockage(":memory:"), FauxNotif(), FauxFlux()
+        # En mémoire : des Dunk Low adulte (42) à 60-90 € et enfant (28) à 20-30 €
+        marche = [dict(item(next(n), rnd.uniform(60, 90)), size_title="42") for _ in range(20)]
+        marche += [dict(item(next(n), rnd.uniform(20, 30)), size_title="28") for _ in range(20)]
+        client.lots = [list(reversed(marche))]
+        flux.passage(client, stock, notif)
+        # Une paire enfant à 22 € n'est pas une affaire (le prix des 28 tourne autour de 25 €)
+        client.lots = [[dict(item(next(n), 22), size_title="28")]]
+        flux.passage(client, stock, notif)
+        self.assertEqual(notif.recues, [])
+        # Une paire adulte à 22 € en est une
+        client.lots = [[dict(item(next(n), 22), size_title="43")]]
+        flux.passage(client, stock, notif)
+        self.assertEqual(len(notif.recues), 1)
+
+    def test_migration_memoire_sans_taille(self):
+        import os, sqlite3, tempfile
+        chemin = os.path.join(tempfile.mkdtemp(), "ancien.db")
+        ancien = sqlite3.connect(chemin)   # mémoire créée par l'ancienne version, sans colonne taille
+        ancien.execute("CREATE TABLE flux (id INTEGER PRIMARY KEY, marque TEXT, etat TEXT, prix REAL, "
+                       "catalogue INTEGER, jetons TEXT, vu_le REAL)")
+        ancien.execute("INSERT INTO flux VALUES (1, 'Nike', 'Très bon état', 70, 0, 'dunk low', 9e9)")
+        ancien.commit()
+        ancien.close()
+        stock = Stockage(chemin)
+        a = normaliser(dict(item(2, 50), size_title="42"))
+        stock.enregistrer_flux([(a, {"dunk", "low"}, "Nike")])
+        lignes = {r[0]: r[1] for r in stock.db.execute("SELECT id, taille FROM flux")}
+        self.assertEqual(lignes, {1: None, 2: "42"})
 
     def test_flux_complet(self):
         rnd = random.Random(3)
@@ -253,7 +316,7 @@ class TestFlux(unittest.TestCase):
         client.lots = [list(reversed(nouvelles)) + client.lots[0][:10]]
         flux.passage(client, stock, notif)
         self.assertEqual([a.annonce.titre for a in notif.recues], ["Baskets Nike Dunk Low Panda"])
-        self.assertIn("titres proches", notif.recues[0].groupe)
+        self.assertIn("même modèle", notif.recues[0].groupe)
 
         # Repassage : aucune alerte en double
         flux.passage(client, stock, notif)

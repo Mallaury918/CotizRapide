@@ -12,7 +12,7 @@ import re
 import time
 from collections import deque
 
-from .analyse import criteres_pour, evaluer, passe_filtres, simplifier
+from .analyse import criteres_pour, evaluer, passe_filtres, simplifier, tailles_compatibles
 from .vendeurs import verifier_vendeur
 
 log = logging.getLogger(__name__)
@@ -46,7 +46,13 @@ FAMILLES = {
 # sans type (sinon « Coque iPhone 15 » ressemblerait à « iPhone 15 »)
 FAMILLES_RISQUEES = {"accessoires", "objets"}
 
-SIMILARITE_MIN = 0.4   # part de mots communs (indice de Jaccard) entre deux titres
+SIMILARITE_MIN = 0.5   # part de mots communs (indice de Jaccard) entre deux titres
+
+# Mots qui distinguent deux modèles d'une même gamme : ils doivent être identiques des deux
+# côtés (« Dunk Low » ≠ « Dunk High », « iPhone 13 » ≠ « iPhone 13 Pro »). Les nombres aussi
+# (« Air Max 90 » ≠ « Air Max 95 », « 550 » ≠ « 530 »).
+VARIANTES = {"low", "mid", "high", "pro", "max", "mini", "plus", "ultra", "lite", "oled",
+             "slim", "air", "xl", "xxl", "jr", "junior", "kids", "enfant", "bebe", "baby", "gs", "ps", "td"}
 _TAILLE = re.compile(r"\b(?:taille|pointure|size|t)[\s:.]*\d+(?:[.,]5)?\b")
 
 
@@ -62,9 +68,16 @@ def familles(j: set) -> set:
     return {nom for nom, mots in FAMILLES.items() if j & mots}
 
 
+def _signature(j: set) -> set:
+    """Ce qui identifie le modèle exact : nombres et mots de variante."""
+    return {m for m in j if m.isdigit() or m in VARIANTES}
+
+
 def comparables(ja: set, jb: set) -> bool:
     communs = len(ja & jb)
     if not communs or communs / len(ja | jb) < SIMILARITE_MIN:
+        return False
+    if _signature(ja) != _signature(jb):
         return False
     fa, fb = familles(ja), familles(jb)
     if fa and fb:
@@ -154,8 +167,9 @@ class Flux:
             candidats = stock.candidats_flux(groupe, j, math.ceil(SIMILARITE_MIN * len(j)),
                                              self.jours, self.table)
             historique = [
-                (id_, prix, a.marque, etat) for id_, prix, etat, catalogue, jb in candidats
+                (id_, prix, a.marque, etat) for id_, prix, etat, catalogue, jb, taille in candidats
                 if (not a.catalogue or not catalogue or catalogue == a.catalogue)
+                and tailles_compatibles(a.taille, taille)
                 and comparables(j, set(jb.split()))
             ]
             aff = evaluer(a, historique, self.crit)
@@ -167,9 +181,7 @@ class Flux:
                 continue
             if not verifier_vendeur(aff, client, stock, self.crit):
                 continue
-            if aff.groupe == "toute la recherche":
-                aff.groupe = "même catégorie" if self.par_categorie else "même marque"
-            aff.groupe += " · titres proches"
+            aff.groupe += " · même catégorie · même modèle" if self.par_categorie else " · même modèle"
             notif.envoyer(aff, self.nom)
             stock.noter_affaire(aff, self.nom)
             self._alertes.append(time.time())

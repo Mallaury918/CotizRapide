@@ -37,6 +37,10 @@ class Stockage:
                 CREATE TABLE IF NOT EXISTS {table}_jetons (
                     marque TEXT, jeton TEXT, id INTEGER, PRIMARY KEY (marque, jeton, id)) WITHOUT ROWID;
             """)
+            # Taille / pointure, ajoutée en octobre 2026 : vide (NULL) pour les annonces plus anciennes
+            colonnes = {c[1] for c in self.db.execute(f"PRAGMA table_info({table})")}
+            if "taille" not in colonnes:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN taille TEXT")
 
     def connait_recherche(self, recherche) -> bool:
         return self.db.execute(
@@ -107,9 +111,10 @@ class Stockage:
         """`lignes` : (annonce, jetons du titre, clé de regroupement)."""
         maintenant = time.time()
         self.db.executemany(
-            f"INSERT OR REPLACE INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(a.id, groupe, a.etat, a.prix_total, a.catalogue, " ".join(sorted(j)), maintenant)
-             for a, j, groupe in lignes])
+            f"INSERT OR REPLACE INTO {table} (id, marque, etat, prix, catalogue, jetons, vu_le, taille)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(a.id, groupe, a.etat, a.prix_total, a.catalogue, " ".join(sorted(j)), maintenant,
+              a.taille or "") for a, j, groupe in lignes])
         self.db.executemany(
             f"INSERT OR IGNORE INTO {table}_jetons VALUES (?, ?, ?)",
             [(groupe, jeton, a.id) for a, j, groupe in lignes for jeton in j])
@@ -118,7 +123,7 @@ class Stockage:
         """Annonces du même groupe partageant au moins `communs_min` mots avec `jetons`."""
         jetons = list(jetons)
         return self.db.execute(f"""
-            SELECT f.id, f.prix, f.etat, f.catalogue, f.jetons FROM {table} f
+            SELECT f.id, f.prix, f.etat, f.catalogue, f.jetons, f.taille FROM {table} f
             JOIN (SELECT id FROM {table}_jetons
                   WHERE marque = ? AND jeton IN ({",".join("?" * len(jetons))})
                   GROUP BY id HAVING COUNT(*) >= ?) c ON c.id = f.id
