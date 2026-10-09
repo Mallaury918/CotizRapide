@@ -157,8 +157,13 @@ def contient_mot(titre: str, mot: str) -> bool:
     return re.search(r"\b" + re.escape(simplifier(mot)) + r"\b", simplifier(titre)) is not None
 
 
+# Toujours écartés, quels que soient les réglages : ce ne sont jamais de vraies affaires
+MOTS_EXCLUS_TOUJOURS = ["flacon vide", "flacons vides", "échantillon", "échantillons",
+                        "décant", "décants", "decant", "fond de flacon"]
+
+
 def passe_filtres(a: Annonce, crit: dict) -> bool:
-    if any(contient_mot(a.titre, m) for m in crit.get("mots_exclus", [])):
+    if any(contient_mot(a.titre, m) for m in MOTS_EXCLUS_TOUJOURS + crit.get("mots_exclus", [])):
         return False
     if any(not contient_mot(a.titre, m) for m in crit.get("mots_requis", [])):
         return False

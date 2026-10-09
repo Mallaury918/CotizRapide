@@ -248,6 +248,18 @@ class TestFlux(unittest.TestCase):
         self.assertFalse(comparables({"iphone", "13", "128go"}, {"iphone", "13", "pro", "128go"}))
         self.assertTrue(comparables({"air", "max", "90", "blanche"}, {"air", "max", "90"}))
 
+    def test_parfums(self):
+        sauvage = jetons("Dior Sauvage Eau de Toilette 100 ml", "Dior")
+        self.assertEqual(sauvage, {"sauvage", "edt", "100ml"})
+        self.assertTrue(comparables(sauvage, jetons("Sauvage EDT 100ml neuf", "Dior")))
+        self.assertFalse(comparables(sauvage, jetons("Sauvage EDT 60ml", "Dior")))          # contenance
+        self.assertFalse(comparables(sauvage, jetons("Sauvage Eau de Parfum 100ml", "Dior")))  # concentration
+        self.assertFalse(comparables(sauvage, jetons("Sauvage Elixir 100ml", "Dior")))       # déclinaison
+        self.assertFalse(comparables(sauvage, jetons("Sauvage EDT 100ml testeur", "Dior")))  # sans boîte
+        self.assertEqual(jetons("La Vie est Belle 7,5ml", "Lancôme"), {"vie", "est", "belle", "7.5ml"})
+        for titre in ("Flacon vide Sauvage 100ml", "Échantillon Sauvage", "Décant Sauvage 10ml"):
+            self.assertFalse(passe_filtres(normaliser(item(1, 20, titre=titre)), {}))
+
     def test_tailles(self):
         from vinted_bot.analyse import gabarit, tailles_compatibles
         self.assertEqual((gabarit("28"), gabarit("42.5"), gabarit("10 ans / 140 cm"), gabarit("M")),

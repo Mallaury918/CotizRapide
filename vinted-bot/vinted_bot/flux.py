@@ -52,16 +52,28 @@ SIMILARITE_MIN = 0.5   # part de mots communs (indice de Jaccard) entre deux tit
 # côtés (« Dunk Low » ≠ « Dunk High », « iPhone 13 » ≠ « iPhone 13 Pro »). Les nombres aussi
 # (« Air Max 90 » ≠ « Air Max 95 », « 550 » ≠ « 530 »).
 VARIANTES = {"low", "mid", "high", "pro", "max", "mini", "plus", "ultra", "lite", "oled",
-             "slim", "air", "xl", "xxl", "jr", "junior", "kids", "enfant", "bebe", "baby", "gs", "ps", "td"}
+             "slim", "air", "xl", "xxl", "jr", "junior", "kids", "enfant", "bebe", "baby", "gs", "ps", "td",
+             # parfums : concentration, déclinaison et présentation changent le prix
+             "edp", "edt", "edc", "extrait", "elixir", "intense", "absolu", "absolue", "extreme",
+             "testeur", "tester", "coffret"}
+_VOLUME = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*ml\b")
+_CONCENTRATIONS = [("eau de parfum", " edp "), ("eau de toilette", " edt "), ("eau de cologne", " edc ")]
 _TAILLE = re.compile(r"\b(?:taille|pointure|size|t)[\s:.]*\d+(?:[.,]5)?\b")
+
+
+def _normaliser_parfum(texte: str) -> str:
+    """« Eau de Parfum 100 ml » → « edp 100ml » : même écriture pour la même contenance."""
+    for long, court in _CONCENTRATIONS:
+        texte = texte.replace(long, court)
+    return _VOLUME.sub(lambda m: f" {float(m.group(1).replace(',', '.')):g}ml ", texte)
 
 
 def jetons(titre: str, marque: str = "", taille: str = "") -> set:
     """Mots significatifs d'un titre, sans la marque, la taille ni les mots vides."""
-    texte = _TAILLE.sub(" ", simplifier(titre).replace("-", ""))
+    texte = _TAILLE.sub(" ", _normaliser_parfum(simplifier(titre).replace("-", "")))
     exclus = (MOTS_VIDES | set(re.findall(r"[a-z0-9]+", simplifier(marque).replace("-", "")))
               | set(re.findall(r"[a-z0-9]+", simplifier(taille))))
-    return {m for m in re.findall(r"[a-z0-9]+", texte) if len(m) >= 2 and m not in exclus}
+    return {m for m in re.findall(r"\d+(?:\.\d+)?ml|[a-z0-9]+", texte) if len(m) >= 2 and m not in exclus}
 
 
 def familles(j: set) -> set:
@@ -69,8 +81,8 @@ def familles(j: set) -> set:
 
 
 def _signature(j: set) -> set:
-    """Ce qui identifie le modèle exact : nombres et mots de variante."""
-    return {m for m in j if m.isdigit() or m in VARIANTES}
+    """Ce qui identifie le modèle exact : nombres, contenances (« 100ml ») et variantes."""
+    return {m for m in j if m.isdigit() or m in VARIANTES or re.fullmatch(r"[\d.]+ml", m)}
 
 
 def comparables(ja: set, jb: set) -> bool:
